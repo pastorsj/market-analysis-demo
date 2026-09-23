@@ -39,7 +39,7 @@ timeline.
   investigation, reads one versioned skill, calls only the tools available to
   that skill, and completes through a typed answer submission.
 - **Local inference with governed escalation.** Nemotron 3.5 Lightning runs on
-  DGX Spark. NeMo Switchyard evaluates each logical model turn and can escalate
+  DGX Spark. NeMo Switchyard evaluates each Deep Agent reasoning turn and can escalate
   to Nemotron 3 Ultra through a configured inference endpoint.
 - **GPU-backed financial evidence.** Typed MCP tools use cuDF, cuVS, cuGraph,
   cuML, CUDA XGBoost, and Nemotron embeddings for market calculations,
@@ -132,7 +132,7 @@ hierarchy locally and can export it to LangSmith when configured.
 2. The runtime exposes one research skill and that skill's allowed MCP tools.
 3. `create_deep_agent` builds the agent with Relay and
    `SwitchyardRoutingMiddleware`.
-4. Every logical model call passes through Switchyard. Luna judges whether the
+4. Every Deep Agent reasoning call passes through Switchyard. Luna judges whether the
    local Lightning result is sufficient or Ultra should run.
 5. The agent chooses evidence tools, reviews their typed results, and calls
    `submit_answer` with citations produced by that investigation.
@@ -221,6 +221,7 @@ Useful operator commands:
 For source changes, these are the shortest useful checks:
 
 ```bash
+corepack pnpm@9.15.9 --dir apps/web install --frozen-lockfile
 corepack pnpm@9.15.9 --dir apps/web test -- --run
 corepack pnpm@9.15.9 --dir apps/web typecheck
 corepack pnpm@9.15.9 --dir apps/web build
@@ -266,3 +267,9 @@ docs/                             Architecture, operations, and walkthrough
 - [Demo walkthrough](docs/DEMO_WALKTHROUGH.md) — presenter flow and example questions
 - [Architecture](docs/ARCHITECTURE.md) — components, trust boundaries, models, and tools
 - [Operations](docs/OPERATIONS.md) — startup, shutdown, recovery, and common failures
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE). Attribution
+for included third-party material is recorded in
+[Third-party notices](THIRD_PARTY_NOTICES.md).

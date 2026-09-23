@@ -45,7 +45,7 @@ and its explicit endpoint policy.
 Agent. Middleware supplies three important boundaries:
 
 1. A request-specific skill narrows the research behavior and available tools.
-2. `SwitchyardRoutingMiddleware` sends every logical model call through the
+2. `SwitchyardRoutingMiddleware` sends every Deep Agent reasoning call through the
    escalation route.
 3. NeMo Relay records the agent, model, and tool hierarchy and can export that
    hierarchy to LangSmith.

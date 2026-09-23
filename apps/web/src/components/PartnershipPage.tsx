@@ -195,14 +195,14 @@ const DETAILS: Readonly<Record<DetailId, TechnologyDetail>> = {
     owner: "langchain",
     eyebrow: "LangChain implementation",
     title: "How the Deep Agent is created",
-    description: "One Deep Agent receives the approved market tools, the selected research skill, checkpointed conversation state, and the middleware that governs every model call. The default general-purpose subagent is disabled so this remains one understandable agent.",
+    description: "One Deep Agent receives the approved market tools, the selected research skill, checkpointed conversation state, and the middleware that governs every Deep Agent reasoning call. The default general-purpose subagent is disabled so this remains one understandable agent.",
     source: "services/agent/src/market_agent/deep_runtime.py:306",
     sourceNote: "Abridged from the production source. Ellipses replace argument bodies; the control flow and named middleware are unchanged.",
     code: AGENT_CODE,
     links: [
       { label: "Deep Agents documentation", href: "https://docs.langchain.com/oss/python/deepagents/overview" },
       { label: "LangGraph documentation", href: "https://docs.langchain.com/oss/python/langgraph/overview" },
-      { label: "Relay integration for Deep Agents", href: "https://docs.nvidia.com/nemo/relay/v0.6.0/supported-integrations/deepagents", note: "Integration contract used by this build" },
+      { label: "Relay integration for Deep Agents", href: "https://docs.nvidia.com/nemo/relay/v0.6.0/supported-integrations/deepagents", note: "Deep Agents integration reference (v0.6)" },
     ],
   },
   routing: {
@@ -212,7 +212,7 @@ const DETAILS: Readonly<Record<DetailId, TechnologyDetail>> = {
     title: "How Switchyard escalates a model turn",
     description: "For each Deep Agent model turn, Lightning produces a local result. Luna judges whether that result is sufficient. Switchyard returns the local result or calls Ultra when Luna confirms escalation. If a provider fails, the turn stops instead of silently choosing another model.",
     source: "services/agent/src/market_agent/deep_runtime.py:147, 273",
-    sourceNote: "Abridged from the production source. The native escalation order is also asserted in tests/agent/test_switchyard_adapter.py:540. Model constants resolve to the approved runtime IDs shown below.",
+    sourceNote: "Abridged from the production source. Focused routing-boundary and model-contract checks are included in tests/agent. Model constants resolve to the approved runtime IDs shown below.",
     code: ROUTING_CODE,
     note: "Nemotron 3.5 Lightning is hosted on this DGX Spark. Nemotron 3 Ultra and the Luna judge come from the approved internal inference server. The optional answer-layout step can call Ultra directly after research; that traced presentation call does not pass through Switchyard. The Ultra link describes the public model family, not the server's checkpoint revision.",
     links: [

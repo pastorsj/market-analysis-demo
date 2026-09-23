@@ -65,7 +65,7 @@ display, and network checks.
 
 Startup is offline with respect to artifacts: it does not build, pull, download,
 or acquire data. Live investigations still require the approved inference
-endpoint because Luna evaluates every logical call and Nemotron 3 Ultra may be
+endpoint because Luna evaluates every Deep Agent reasoning call and Nemotron 3 Ultra may be
 selected. LangSmith is optional observability; the inference endpoint is not.
 
 Prefer a tested wired network or dedicated connection over captive conference

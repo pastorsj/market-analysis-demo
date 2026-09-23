@@ -449,7 +449,7 @@ else
 fi
 
 if (( failures )); then
-  spark_log "doctor found ${failures} blocking issue(s); see docs/TROUBLESHOOTING.md"
+  spark_log "doctor found ${failures} blocking issue(s); see docs/OPERATIONS.md"
   exit 1
 fi
 if [[ "$booth_ready" == true ]]; then

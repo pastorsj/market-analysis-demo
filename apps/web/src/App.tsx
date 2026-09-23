@@ -11,7 +11,8 @@ import { getShockEvents, type ShockEvent } from "./api/events";
 import { parseFailure, terminalTurn, type Investigation, type InvestigationRequest, type Scope, type TerminalOutcome, type TerminalTurn } from "./api/types";
 import type { InvestigationState } from "./state/investigation";
 
-// NVIDIA eye path adapted from AI-Q's Apache-2.0 Logo component.
+// Modified NVIDIA eye path adapted from AI-Q's Apache-2.0 Logo component.
+// See THIRD_PARTY_NOTICES.md and LICENSES/Apache-2.0.txt.
 function NvidiaMark() {
   return (
     <svg className="nvidia-mark" viewBox="0 0 71 47" role="img" aria-label="NVIDIA">
