@@ -195,6 +195,8 @@ if [[ "$recreate_agent" == true ]]; then
 else
   spark_openshell start
 fi
+spark_openshell_remote_provider_probe >/dev/null \
+  || spark_die "remote inference admission failed; run ./demo stop, confirm host network readiness, then run ./demo start --recreate-agent"
 "${COMPOSE[@]}" up -d --no-build --pull never --no-deps --wait \
   --wait-timeout "${SPARK_START_TIMEOUT_SECONDS:-600}" web
 for service in web tools model; do

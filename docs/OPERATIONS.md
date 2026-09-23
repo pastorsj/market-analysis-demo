@@ -15,7 +15,7 @@ network before starting the workstation. Log in, then run:
 
 ```bash
 cd market-analysis-demo
-./demo
+./demo start --recreate-agent
 ./demo doctor
 ```
 
@@ -29,6 +29,11 @@ The start path uses `--no-build --pull never`. It validates the source-bound
 images, local models, event catalog, scenario, retention limits, and OpenShell
 deployment before reporting readiness.
 
+After a full host reboot, explicit agent recreation refreshes the prepared
+OpenShell sandbox network namespace while preserving mounted investigation state
+and traces. For another start during the same host boot, normal `./demo` startup
+is sufficient.
+
 ## Status
 
 ```bash
@@ -38,7 +43,9 @@ deployment before reporting readiness.
 
 `status` is a concise public view. `doctor` checks the host, GB10 GPU, prepared
 artifacts, local generation, tools, OpenShell sandbox, and the configured
-Switchyard route without printing provider credentials.
+Switchyard route without printing provider credentials. It also makes one
+bounded, authenticated, non-inference `/models` request from inside the sandbox
+to prove DNS, TLS, authentication, and endpoint admission.
 
 The page can appear before the full agent is ready after a machine restart.
 Trust the startup and doctor results, not the presence of an HTTP page alone.
@@ -79,6 +86,7 @@ labeled saved investigation rather than presenting it as a fresh run.
 | No approved analysis model | The required route is unavailable | Restore the approved endpoint, then run `./demo doctor` |
 | Analysis model connection failed | Provider transport failed | Check the venue network and retry once after readiness returns |
 | Local generation timeout | The local model did not complete its bounded canary | Stop new work and inspect the model service; do not loop restarts |
+| `REMOTE_PROVIDER` failed | The sandbox could not reach or authenticate to the approved inference endpoint | Run `./demo stop`, confirm host network readiness, then run `./demo start --recreate-agent` once; if it repeats, take the demo out of service |
 | Evidence tool unavailable | The typed evidence service is not healthy | Run `./demo doctor` and inspect the safe diagnostics |
 | Identity or receipt mismatch | Source, image, model, or data drift was detected | Do not bypass the check or substitute another model |
 

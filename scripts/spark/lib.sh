@@ -298,6 +298,58 @@ except (RuntimeError, OSError, ValueError, KeyError, json.JSONDecodeError):
 PY
 }
 
+spark_openshell_remote_provider_probe() {
+  # Prove that the endpoint-bound inference provider still works from the
+  # sandbox network namespace. A host reboot can leave a resumed sandbox with
+  # stale DNS even though its process and provider attachment both look ready.
+  # Reduce every failure to one operator-safe message; never print the endpoint,
+  # credential, response body, or transport exception.
+  python3 - "$REPO_ROOT" <<'PY'
+import json
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from scripts.spark.openshell_runtime import NAME, shell
+
+code = r'''
+import json
+import os
+import urllib.request
+
+enabled = os.environ.get("REMOTE_ROUTING_ENABLED", "false").lower() == "true"
+if not enabled:
+    print(json.dumps({"schema_version": "remote-provider-probe-v1", "status": "skipped", "enabled": False}, sort_keys=True, separators=(",", ":")))
+    raise SystemExit(0)
+
+base = os.environ.get("NVIDIA_BASE_URL", "").rstrip("/")
+credential = os.environ.get("NVIDIA_INFERENCE_API_KEY", "")
+if not base or not credential:
+    raise SystemExit(1)
+
+try:
+    request = urllib.request.Request(base + "/models", headers={"Authorization": "Bearer " + credential})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        if response.status != 200:
+            raise SystemExit(1)
+except Exception:
+    raise SystemExit(1) from None
+
+print(json.dumps({"schema_version": "remote-provider-probe-v1", "status": "pass", "enabled": True, "http_status": 200}, sort_keys=True, separators=(",", ":")))
+'''
+
+try:
+    raw = shell("sandbox", "exec", "-n", NAME, "--", "/usr/local/bin/python3.12", "-c", code, timeout=20)
+    value = json.loads(raw)
+    disabled = {"schema_version": "remote-provider-probe-v1", "status": "skipped", "enabled": False}
+    enabled = {"schema_version": "remote-provider-probe-v1", "status": "pass", "enabled": True, "http_status": 200}
+    if value not in (disabled, enabled):
+        raise ValueError
+    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
+except (RuntimeError, OSError, ValueError, json.JSONDecodeError):
+    raise SystemExit("OpenShell remote inference probe failed; no endpoint, credential, response, or transport detail was displayed") from None
+PY
+}
+
 spark_openshell_maintenance_acquire() {
   local target=$1
   python3 - "$REPO_ROOT" "$target" <<'PY'

@@ -77,8 +77,17 @@ def environment():
 
 def run(args, *, capture=True, timeout=120, discard=False, input_text=None):
     streams = {'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL} if discard else {'capture_output': capture}
-    result = subprocess.run([str(v) for v in args], cwd=ROOT, env=environment(),
-                            **streams, input=input_text, text=True, timeout=timeout)
+    try:
+        result = subprocess.run([str(v) for v in args], cwd=ROOT, env=environment(),
+                                **streams, input=input_text, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # TimeoutExpired includes the complete argv in its public attributes and
+        # string representation. Normalize it here so callers cannot accidentally
+        # surface provider configuration embedded in an OpenShell command.
+        raise RuntimeError(
+            f'Operator command timed out ({Path(str(args[0])).name}); '
+            'no private output was displayed'
+        ) from None
     if result.returncode:
         # Arguments or gateway errors can contain private configuration.
         raise RuntimeError(f'Operator command failed ({Path(str(args[0])).name}); no private output was displayed')

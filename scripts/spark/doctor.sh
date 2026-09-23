@@ -80,6 +80,7 @@ if [[ -n "$("${COMPOSE[@]}" ps --status running -q 2>/dev/null)" ]]; then
   fi
   if [[ "$booth_ready" == true ]]; then
     check GENERATION_CANARY "bounded local generation proof" spark_openshell_generation_canary false
+    check REMOTE_PROVIDER "approved inference endpoint reachable" spark_openshell_remote_provider_probe
   fi
   check TOOLS_HEALTH "tools evidence health ready" bash -c \
     '"${@:2}" exec -T tools python -c '\''import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=3).read().decode())'\'' >"$1"' \

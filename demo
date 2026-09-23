@@ -6,7 +6,7 @@ usage() {
 Usage: ./demo <command>
 
 Commands:
-  start         Start prepared artifacts (`--recreate-agent` after a source refresh)
+  start         Start prepared artifacts (`--recreate-agent` after a host reboot or source refresh)
   doctor        Check host, GPU, artifacts, images, services, and port safely
   status        Show the public runtime status
   stop          Stop containers while preserving models, data, and caches

@@ -197,11 +197,16 @@ Spark that was provisioned from this exact source and already has its immutable
 artifacts beneath `/srv/market-shock`.
 
 On that prepared Spark, configure the ignored `.env` with the approved endpoint
-and credentials, then start the demo and open **http://localhost:3000**:
+and credentials. After a full host reboot, refresh the prepared OpenShell sandbox
+network namespace, verify readiness, and open **http://localhost:3000**:
 
 ```bash
-./demo
+./demo start --recreate-agent
+./demo doctor
 ```
+
+For another start during the same host boot, normal `./demo` startup is enough.
+See [Operations](docs/OPERATIONS.md) for the transport and recovery sequence.
 
 Startup does not build, pull, install, acquire data, or download models. It
 verifies the prepared artifacts and starts only from local images. Live research
