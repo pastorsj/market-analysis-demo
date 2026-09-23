@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://market-shock.local/schemas/model-manifest.schema.json",
+  "title": "Immutable local model manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "created_at", "models", "embedding_contract", "serving_contract"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "models": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "model_id", "revision", "tokenizer_revision", "local_path", "license", "files"],
+        "properties": {
+          "role": {"enum": ["embedding", "generation", "draft"]},
+          "model_id": {"type": "string", "pattern": "^nvidia/Nemotron|^nvidia/NVIDIA-Nemotron"},
+          "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "tokenizer_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "local_path": {"type": "string", "pattern": "^/srv/market-shock/models/hf/[^.][^/]*$"},
+          "license": {"type": "string", "minLength": 1},
+          "files": {
+            "type": "array", "minItems": 2,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["path", "sha256", "bytes"],
+              "properties": {
+                "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "bytes": {"type": "integer", "minimum": 1}
+              }
+            }
+          }
+        }
+      }
+    },
+    "embedding_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["dimensions", "checkpoint_dtype", "output_dtype", "query_prefix", "passage_prefix", "l2_normalize", "max_tokens", "chunking"],
+      "properties": {
+        "dimensions": {"const": 2048}, "checkpoint_dtype": {"const": "bfloat16"},
+        "output_dtype": {"const": "float32"}, "query_prefix": {"const": "query: "},
+        "passage_prefix": {"const": "passage: "}, "l2_normalize": {"const": true},
+        "max_tokens": {"const": 4096}, "chunking": {"const": "deterministic-token-boundaries-v1"}
+      }
+    },
+    "serving_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["image", "image_index_digest", "image_arm64_digest", "moe_backend", "kv_cache_dtype", "prefix_caching", "speculative_tokens", "mamba_backend", "mamba_cache_mode", "reasoning_parser", "tool_call_parser", "automatic_tool_choice"],
+      "properties": {
+        "image": {"const": "vllm/vllm-openai:v0.27.1"},
+        "image_index_digest": {"const": "sha256:0a51ea5b4ae2dc5d81890e5173f54203d2a3ae0cfffe51b8fd2afd4391bfd967"},
+        "image_arm64_digest": {"const": "sha256:1c8e60a0841b333c700488cb029d3664807249da0c071e862191b00fe34b228c"},
+        "moe_backend": {"const": "marlin"}, "kv_cache_dtype": {"const": "fp8"},
+        "prefix_caching": {"const": true}, "speculative_tokens": {"const": 3},
+        "mamba_backend": {"const": "flashinfer"}, "mamba_cache_mode": {"const": "align"},
+        "reasoning_parser": {"const": "nemotron_v3"}, "tool_call_parser": {"const": "qwen3_coder"},
+        "automatic_tool_choice": {"const": true}
+      }
+    }
+  }
+}

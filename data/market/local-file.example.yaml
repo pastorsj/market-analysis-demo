@@ -1,0 +1,35 @@
+version: 1
+adapter: local_file
+provider: REPLACE_WITH_ENTITLED_PROVIDER
+attribution_url: https://example.com/replace-with-public-dataset-attribution
+license_id: REPLACE_WITH_LICENSE_OR_ENTITLEMENT
+redistribution: local_only
+vintage_status: reconstructed_later
+archive_proof: null # Required for archived_at_cutoff: absolute path/hash, HTTPS URL, proved_at, coverage_end_exclusive.
+requested_window:
+  start: "2022-01-03"
+  end_exclusive: "2026-09-12"
+files:
+  bars:
+    path: /absolute/operator/path/bars.parquet
+    format: parquet
+    sha256: REPLACE_WITH_64_HEX_DIGEST
+    columns:
+      instrument_id: ticker
+      session_date: date
+      adjusted_open: adjusted_open
+      adjusted_high: adjusted_high
+      adjusted_low: adjusted_low
+      adjusted_close: adjusted_close
+      volume: volume
+    price_basis: provider_adjusted
+  actions:
+    path: /absolute/operator/path/actions.csv
+    format: csv
+    sha256: REPLACE_WITH_64_HEX_DIGEST
+    columns:
+      instrument_id: ticker
+      effective_at: effective_at
+      published_at: published_at
+      action_type: action_type
+      factor: factor

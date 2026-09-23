@@ -1,0 +1,19 @@
+version: 1
+adapter: local_news_metadata
+provider: REPLACE_WITH_LICENSED_PROVIDER
+attribution_url: https://example.com/replace-with-provider-attribution
+license_id: REPLACE_WITH_LICENSE_OR_ENTITLEMENT
+redistribution: metadata_only
+vintage_status: reconstructed_later
+archive_proof: null # Required for archived_at_cutoff; see the market local-file example.
+file:
+  path: /absolute/operator/path/news-metadata.jsonl
+  sha256: REPLACE_WITH_64_HEX_DIGEST
+columns:
+  issuer_id: issuer_id
+  event_id: event_id
+  title: title
+  canonical_url: canonical_url
+  published_at: published_at
+  source_revised_at: source_revised_at
+  summary: project_authored_summary

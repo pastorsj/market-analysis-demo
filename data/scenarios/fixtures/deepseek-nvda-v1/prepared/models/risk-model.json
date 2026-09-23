@@ -1,0 +1,7 @@
+{
+  "gpu_required_for_booth": true,
+  "kind": "seeded_fixture_contract",
+  "labels_separate": true,
+  "seed": 20250127,
+  "training_cutoff": "2025-01-24T21:00:00Z"
+}

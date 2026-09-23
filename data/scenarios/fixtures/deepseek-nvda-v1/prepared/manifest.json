@@ -1,0 +1,155 @@
+{
+  "artifacts": [
+    {
+      "bytes": 157,
+      "media_type": "application/json",
+      "path": "indexes/cuvs-index.json",
+      "records": 1,
+      "sha256": "dcbda8f52924e2f2ad8c9fbaeba55a8d98937656bfe0e518450c6247d6f07166",
+      "source_ids": []
+    },
+    {
+      "bytes": 163,
+      "media_type": "application/json",
+      "path": "indexes/embedding_ids.json",
+      "records": 1,
+      "sha256": "3a23cc6d8a03b0be6d2f59d4857de6652960e7ab7357b73b8dd428b80cd8dc76",
+      "source_ids": []
+    },
+    {
+      "bytes": 40960,
+      "media_type": "application/octet-stream",
+      "path": "indexes/embeddings.f32",
+      "records": 5,
+      "sha256": "c8fc0c9b6c2f69955d588ae8538f248e998182e201f7c15bcb4375ab704e058f",
+      "source_ids": []
+    },
+    {
+      "bytes": 166,
+      "media_type": "application/json",
+      "path": "models/risk-model.json",
+      "records": 1,
+      "sha256": "10b23bbaa3c177fa084efbf6eb15d9a3b8599cf1817c2ec21f0e80bd8230eda2",
+      "source_ids": []
+    },
+    {
+      "bytes": 675,
+      "media_type": "application/json",
+      "path": "processed/analogue_features.json",
+      "records": 1,
+      "sha256": "ddc2f19013c06b5ad4ff533e2651c9a6ebd98174e71efd519c1f5de52c4a5f21",
+      "source_ids": [
+        "fixture-market-facts-v1"
+      ]
+    },
+    {
+      "bytes": 4146,
+      "media_type": "application/json",
+      "path": "processed/documents.jsonl",
+      "records": 5,
+      "sha256": "bfe3a57c0006609a3454708b55fa119202b2be0007cba503dca9c7a9a554d621",
+      "source_ids": [
+        "nvidia-deepseek-statement-20250127",
+        "white-house-deepseek-20250128",
+        "sec-nvda-10q-20241120",
+        "microsoft-fy25-q2-20250129",
+        "asml-q4-2024-results-20250129"
+      ]
+    },
+    {
+      "bytes": 1562,
+      "media_type": "application/json",
+      "path": "processed/graph.json",
+      "records": 1,
+      "sha256": "11de3edeaecc5407fde6b93c20b3149faa5e0fe5bacc51b49aa22015e2501dd5",
+      "source_ids": [
+        "fixture-market-facts-v1",
+        "sec-nvda-10q-20241120"
+      ]
+    },
+    {
+      "bytes": 9033,
+      "media_type": "application/json",
+      "path": "processed/market.jsonl",
+      "records": 22,
+      "sha256": "2821f207a355e3167088ce96776c5a7a83a91d5ea2e1bb104f95c81d8d6949f6",
+      "source_ids": [
+        "fixture-market-facts-v1"
+      ]
+    },
+    {
+      "bytes": 282,
+      "media_type": "application/json",
+      "path": "processed/projection_inputs.json",
+      "records": 1,
+      "sha256": "a0bdaa2fd4c29aecf8f7eaf1f05787a33cc316e95b13f27056e1b8d7a3bf14a9",
+      "source_ids": []
+    },
+    {
+      "bytes": 3771,
+      "media_type": "application/json",
+      "path": "raw/documents.jsonl",
+      "records": 6,
+      "sha256": "8ebda5e01097f711ea50e949f12529d7ebd00cb1b21b244fee164b1038457825",
+      "source_ids": [
+        "nvidia-deepseek-statement-20250127",
+        "white-house-deepseek-20250128",
+        "sec-nvda-10q-20241120",
+        "microsoft-fy25-q2-20250129",
+        "asml-q4-2024-results-20250129"
+      ]
+    },
+    {
+      "bytes": 3944,
+      "media_type": "text/csv",
+      "path": "raw/market.csv",
+      "records": 22,
+      "sha256": "7b3a490b97c5ac94af0671d6871103c08e51471b0baccd1d72183a034b316885",
+      "source_ids": [
+        "fixture-market-facts-v1"
+      ]
+    },
+    {
+      "bytes": 631,
+      "media_type": "text/csv",
+      "path": "raw/relations.csv",
+      "records": 6,
+      "sha256": "ca78240c56a6d4d1768173004742705cbc483c028596083ac2df574f1c3df804",
+      "source_ids": [
+        "fixture-market-facts-v1",
+        "sec-nvda-10q-20241120"
+      ]
+    }
+  ],
+  "created_at": "2026-09-13T00:00:00Z",
+  "date_coverage": {
+    "calendar": "XNYS",
+    "end": "2025-02-14",
+    "start": "2024-12-02",
+    "timezone": "America/New_York"
+  },
+  "embedding": {
+    "dimension": 2048,
+    "implementation": "deterministic_fake_test_only",
+    "max_tokens": 4096,
+    "model_dtype": "bfloat16",
+    "model_id": "nvidia/Nemotron-3-Embed-1B-BF16",
+    "normalized": true,
+    "passage_role": "passage",
+    "query_role": "query",
+    "revision": "9e0b24858b1195815ecb1188ffa1b73bcea7b30a",
+    "storage_dtype": "float32",
+    "tokenizer_revision": "9e0b24858b1195815ecb1188ffa1b73bcea7b30a"
+  },
+  "fixture_tier": "ci",
+  "scenario_id": "deepseek-nvda-v1",
+  "schema_version": 1,
+  "snapshot_id": "market-shock-corpus-v1",
+  "supported_universe": [
+    "NVDA",
+    "AMD",
+    "JPM",
+    "GS",
+    "SCHW"
+  ]
+}

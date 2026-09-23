@@ -1,0 +1,547 @@
+version: 1
+catalog_id: curated-shock-events-v1
+calendar: XNYS
+timezone: America/New_York
+
+supported_tickers: [AMD, AVGO, GS, JPM, NVDA, QQQ, SCHW, SPY, XLF]
+
+categories:
+  - category_id: ai-competition
+    label: AI competition
+    description: Competitive AI developments and changes in expectations for compute demand.
+    sort_order: 1
+  - category_id: regulation-export-controls
+    label: Regulation and export controls
+    description: Policy actions that can change addressable markets, product availability, or costs.
+    sort_order: 2
+  - category_id: banking-liquidity
+    label: Banking and liquidity
+    description: Funding, deposit, duration, and confidence shocks affecting financial institutions.
+    sort_order: 3
+  - category_id: earnings-guidance
+    label: Earnings and guidance
+    description: Company results and outlook updates associated with a focused repricing window.
+    sort_order: 4
+
+events:
+  - event_id: fed-rate-hike-2026-09-16
+    category_id: banking-liquidity
+    title: Federal Reserve rate increase and financial-sector repricing
+    summary: The Federal Reserve raised its target range on September 16, 2026, creating a recent policy window for comparing the event-day response in JPMorgan, Goldman Sachs, Schwab, and broad financial-sector trading with contextual evidence through September 18.
+    sort_order: 1
+    event_session: "2026-09-16"
+    source_dates: ["2026-09-16"]
+    primary_ticker: JPM
+    analysis_tickers: [JPM, GS, SCHW]
+    context_instruments: [XLF, SPY]
+    start_session: "2026-09-11"
+    end_session: "2026-09-18"
+    default_cutoff: "2026-09-18T20:00:00Z"
+    questions:
+      - question_id: fed-hike-financials-move
+        label: Measure the financial response
+        capability: move-measurement
+        text: How did JPMorgan trade on the Federal Reserve's September 16, 2026 rate-increase session relative to Goldman Sachs, Schwab, XLF, and SPY?
+      - question_id: fed-hike-policy-evidence
+        label: Review the policy evidence
+        capability: evidence-review
+        text: What did cutoff-qualified Federal Reserve source evidence say about the September 16, 2026 decision, what measured JPMorgan reaction can it support, and what remains uncertain about causality?
+      - question_id: fed-hike-financials-ranking
+        label: Rank the financial response
+        capability: peer-comparison
+        text: Rank JPMorgan, Goldman Sachs, and Schwab separately by their September 16, 2026 event-session return and volume ratio, identify the most extreme response under each measure, and compare it against XLF and SPY.
+      - question_id: fed-hike-financials-analogues
+        label: Find historical analogues
+        capability: historical-analogues
+        text: Which prior observations across the validated universe most closely resemble JPMorgan's measured September 16, 2026 response in absolute-return magnitude and volume ratio, and where do those comparisons break down?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: fed-primary-2026-09-16, source_kinds: [primary_source]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: public-authority-source-scope
+        detail: The Federal Reserve statement is primary evidence for the policy decision, not JPMorgan-authored evidence or proof of any single stock's causal driver; the curated news context is selective.
+
+  - event_id: nvda-earnings-2026-08-27
+    category_id: earnings-guidance
+    title: NVIDIA fiscal 2027 second-quarter repricing
+    summary: NVIDIA reported fiscal 2027 second-quarter results and its outlook on August 26, 2026, creating a recent repricing window for NVIDIA and semiconductor peers beginning August 27.
+    sort_order: 2
+    event_session: "2026-08-27"
+    source_dates: ["2026-08-26"]
+    primary_ticker: NVDA
+    analysis_tickers: [NVDA, AMD, AVGO]
+    context_instruments: [QQQ, SPY]
+    start_session: "2026-08-19"
+    end_session: "2026-08-31"
+    default_cutoff: "2026-08-31T20:00:00Z"
+    questions:
+      - question_id: nvda-q2-fy27-move
+        label: Measure the earnings response
+        capability: move-measurement
+        text: How unusual was NVIDIA's August 27, 2026 move and trading volume relative to its recent history, QQQ, and SPY?
+      - question_id: nvda-q2-fy27-evidence
+        label: Review results and outlook
+        capability: evidence-review
+        text: What did NVIDIA's cutoff-qualified fiscal 2027 second-quarter company release report, how did NVDA trade on the August 27, 2026 reaction session, and what remained uncertain about causality?
+      - question_id: nvda-q2-fy27-peers
+        label: Compare semiconductor peers
+        capability: peer-comparison
+        text: How did AMD and Broadcom trade around NVIDIA's fiscal 2027 second-quarter results relative to NVIDIA and the broader technology market?
+      - question_id: nvda-q2-fy27-analogues
+        label: Find historical analogues
+        capability: historical-analogues
+        text: Which prior observations across the validated universe most closely match NVIDIA's measured August 27, 2026 response in absolute-return magnitude and volume ratio, and where do they differ?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: nvda-release-2026-08-31, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive record of analyst expectations or market commentary.
+
+  - event_id: nvda-deepseek-2025-01-27
+    category_id: ai-competition
+    title: NVIDIA and the DeepSeek R1 repricing
+    summary: Market attention on DeepSeek R1 and AI compute economics coincided with a sharp repricing of NVIDIA and related semiconductor equities on January 27, 2025.
+    sort_order: 3
+    event_session: "2025-01-27"
+    source_dates: ["2025-01-27"]
+    primary_ticker: NVDA
+    analysis_tickers: [NVDA, AMD, AVGO]
+    context_instruments: [QQQ, SPY]
+    start_session: "2024-12-24"
+    end_session: "2025-02-10"
+    default_cutoff: "2025-01-27T21:00:00Z"
+    questions:
+      - question_id: nvda-deepseek-move
+        label: Measure the repricing
+        capability: move-measurement
+        text: How unusual was NVIDIA's January 27, 2025 move relative to its recent history and the broader market?
+      - question_id: nvda-deepseek-evidence
+        label: Review the evidence
+        capability: evidence-review
+        text: What cutoff-qualified evidence helps explain NVIDIA's January 27, 2025 repricing, and what remains uncertain?
+      - question_id: nvda-deepseek-peers
+        label: Compare semiconductor peers
+        capability: peer-comparison
+        text: How did AMD and Broadcom behave around the NVIDIA and DeepSeek repricing, after accounting for the market backdrop?
+      - question_id: nvda-deepseek-analogues
+        label: Find historical analogues
+        capability: historical-analogues
+        text: Which historical analogues are most similar to NVIDIA's January 27, 2025 market shock, what measured features make them similar, and where do the comparisons break down?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: nvda-primary-2025-01-27, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps:
+      - code: publication_proof_source_identity
+        layer: documents
+        detail: The captured NVIDIA statement has not passed the current publication-identity proof contract.
+      - code: unsupported_missing_company_release
+        layer: documents
+        detail: No cutoff-qualified NVIDIA company release is currently published for this event.
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: incomplete-event-evidence
+        detail: The unavailable official statement limits causal attribution; the curated demo news set is selective rather than exhaustive.
+
+  - event_id: schw-bank-shock-2023-03-13
+    category_id: banking-liquidity
+    title: Schwab during regional-bank stress
+    summary: Charles Schwab traded during acute regional-bank stress on March 13, 2023, while the company published information about activity, liquidity, and balance-sheet positioning.
+    sort_order: 4
+    event_session: "2023-03-13"
+    source_dates: ["2023-03-13"]
+    primary_ticker: SCHW
+    analysis_tickers: [SCHW, JPM, GS]
+    context_instruments: [XLF, SPY]
+    start_session: "2023-02-10"
+    end_session: "2023-03-27"
+    default_cutoff: "2023-03-13T20:00:00Z"
+    questions:
+      - question_id: schw-bank-stress-move
+        label: Measure the dislocation
+        capability: move-measurement
+        text: How unusual was Schwab's March 13, 2023 price and volume behavior relative to its preceding trading history?
+      - question_id: schw-bank-stress-evidence
+        label: Review liquidity evidence
+        capability: evidence-review
+        text: What did cutoff-qualified company evidence say about Schwab's liquidity and balance-sheet position during the regional-bank shock?
+      - question_id: schw-bank-stress-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did Schwab's dislocation compare with JPMorgan, Goldman Sachs, and the financial-sector benchmark in the same window?
+      - question_id: schw-bank-stress-analogues
+        label: Find historical analogues
+        capability: historical-analogues
+        text: Which prior Schwab or financial-sector episodes most closely resemble the measured March 2023 shock, and where do they differ?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: schw-primary-2023-03-13, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive news archive.
+
+  - event_id: amd-event-2025-04-16
+    category_id: regulation-export-controls
+    title: AMD MI308 export-control disclosure
+    summary: AMD disclosed a new export-license requirement affecting MI308 products on April 16, 2025, creating a focused policy and semiconductor repricing window.
+    sort_order: 5
+    event_session: "2025-04-16"
+    source_dates: ["2025-04-16"]
+    primary_ticker: AMD
+    analysis_tickers: [AMD, NVDA, AVGO]
+    context_instruments: [QQQ, SPY]
+    start_session: "2025-03-19"
+    end_session: "2025-05-01"
+    default_cutoff: "2025-04-16T20:00:00Z"
+    questions:
+      - question_id: amd-export-controls-move
+        label: Measure the policy shock
+        capability: move-measurement
+        text: How unusual was AMD's April 16, 2025 move and trading volume relative to its recent history?
+      - question_id: amd-export-controls-evidence
+        label: Review the disclosure
+        capability: evidence-review
+        text: What did AMD's cutoff-qualified filing disclose about the MI308 license requirement, and what did it leave unresolved?
+      - question_id: amd-export-controls-peers
+        label: Compare semiconductor peers
+        capability: peer-comparison
+        text: How did NVIDIA and Broadcom trade around AMD's export-control disclosure relative to AMD and the market?
+      - question_id: amd-export-controls-risk
+        label: Map the risk channels
+        capability: risk-analysis
+        text: Which revenue, inventory, demand, and policy channels were most relevant to AMD immediately after the disclosure?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: amd-primary-2025-04-16, source_kinds: [primary_source]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: policy-outcome-uncertain
+        detail: The event catalog describes the initial disclosure window and does not encode later licensing outcomes as known at cutoff.
+
+  - event_id: nvda-earnings-2024-08-28
+    category_id: earnings-guidance
+    title: NVIDIA fiscal 2025 second-quarter results
+    summary: NVIDIA reported second-quarter fiscal 2025 results and an outlook on August 28, 2024, defining an earnings-related repricing window for NVIDIA and semiconductor peers.
+    sort_order: 6
+    event_session: "2024-08-28"
+    source_dates: ["2024-08-28"]
+    primary_ticker: NVDA
+    analysis_tickers: [NVDA, AMD, AVGO]
+    context_instruments: [QQQ, SPY]
+    start_session: "2024-07-31"
+    end_session: "2024-09-12"
+    default_cutoff: "2024-08-29T20:00:00Z"
+    questions:
+      - question_id: nvda-q2-fy25-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did NVIDIA trade around its fiscal 2025 second-quarter results relative to its recent volatility and volume?
+      - question_id: nvda-q2-fy25-evidence
+        label: Review results and outlook
+        capability: evidence-review
+        text: Which cutoff-qualified reported results and outlook details were most relevant to the post-earnings repricing?
+      - question_id: nvda-q2-fy25-peers
+        label: Compare semiconductor peers
+        capability: peer-comparison
+        text: How did AMD and Broadcom respond around NVIDIA's earnings window relative to NVIDIA, QQQ, and SPY?
+      - question_id: nvda-q2-fy25-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which historical NVIDIA episodes most closely match this earnings-window move on return, volume, and benchmark-relative features?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: nvda-release-2024-08-29, source_kinds: [company_release, filing]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive analyst or news archive.
+
+  - event_id: amd-earnings-2025-02-04
+    category_id: earnings-guidance
+    title: AMD 2024 fourth-quarter results
+    summary: AMD reported fourth-quarter and full-year 2024 results and a first-quarter outlook on February 4, 2025, defining an earnings-related semiconductor research window.
+    sort_order: 7
+    event_session: "2025-02-04"
+    source_dates: ["2025-02-04"]
+    primary_ticker: AMD
+    analysis_tickers: [AMD, NVDA, AVGO]
+    context_instruments: [QQQ, SPY]
+    start_session: "2025-01-03"
+    end_session: "2025-02-19"
+    default_cutoff: "2025-02-05T21:00:00Z"
+    questions:
+      - question_id: amd-q4-2024-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did AMD trade around its fourth-quarter 2024 results relative to its recent volatility and trading volume?
+      - question_id: amd-q4-2024-evidence
+        label: Review results and outlook
+        capability: evidence-review
+        text: Which cutoff-qualified AMD results and outlook details were most relevant to the observed earnings-window repricing?
+      - question_id: amd-q4-2024-peers
+        label: Compare semiconductor peers
+        capability: peer-comparison
+        text: How did NVIDIA and Broadcom behave around AMD's results relative to AMD and the broader technology market?
+      - question_id: amd-q4-2024-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which earlier AMD trading episodes most closely resemble this earnings window, and which measured features differ?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: amd-release-2025-02-05, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive analyst or news archive.
+
+  - event_id: jpm-earnings-2025-01-15
+    category_id: earnings-guidance
+    title: JPMorgan Chase 2024 fourth-quarter results
+    summary: JPMorgan Chase reported fourth-quarter 2024 results on January 15, 2025, defining a financial-sector comparison window around revenue, credit, and business performance.
+    sort_order: 8
+    event_session: "2025-01-15"
+    source_dates: ["2025-01-15"]
+    primary_ticker: JPM
+    analysis_tickers: [JPM, GS, SCHW]
+    context_instruments: [XLF, SPY]
+    start_session: "2024-12-13"
+    end_session: "2025-01-30"
+    default_cutoff: "2025-01-15T21:00:00Z"
+    questions:
+      - question_id: jpm-q4-2024-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did JPMorgan trade around its fourth-quarter 2024 results relative to its recent history and financial-sector benchmarks?
+      - question_id: jpm-q4-2024-evidence
+        label: Review reported drivers
+        capability: evidence-review
+        text: Which cutoff-qualified reported results and management disclosures were most relevant to JPMorgan's earnings-window move?
+      - question_id: jpm-q4-2024-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did Goldman Sachs and Schwab trade around JPMorgan's results relative to JPMorgan, XLF, and SPY?
+      - question_id: jpm-q4-2024-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which earlier JPMorgan trading episodes most closely resemble this earnings window on return and volume features?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: jpm-release-2025-01-15, source_kinds: [company_release, filing]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive market-commentary archive.
+
+  - event_id: jpm-earnings-2025-04-11
+    category_id: earnings-guidance
+    title: JPMorgan Chase 2025 first-quarter results
+    summary: JPMorgan Chase reported first-quarter 2025 results on April 11, 2025, defining a financial-sector window around revenue, credit costs, and business performance.
+    sort_order: 9
+    event_session: "2025-04-11"
+    source_dates: ["2025-04-11"]
+    primary_ticker: JPM
+    analysis_tickers: [JPM, GS, SCHW]
+    context_instruments: [XLF, SPY]
+    start_session: "2025-03-14"
+    end_session: "2025-04-28"
+    default_cutoff: "2025-04-11T20:00:00Z"
+    questions:
+      - question_id: jpm-q1-2025-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did JPMorgan trade around its first-quarter 2025 results relative to recent volatility and financial-sector benchmarks?
+      - question_id: jpm-q1-2025-evidence
+        label: Review reported drivers
+        capability: evidence-review
+        text: Which cutoff-qualified revenue, credit-cost, and business-performance disclosures were most relevant to the observed move?
+      - question_id: jpm-q1-2025-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did Goldman Sachs and Schwab behave around JPMorgan's results relative to JPMorgan and XLF?
+      - question_id: jpm-q1-2025-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which historical JPMorgan or financial-sector episodes best match this earnings-window return and volume profile?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: jpm-release-2025-04-11, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive market-commentary archive.
+
+  - event_id: gs-earnings-2024-10-15
+    category_id: earnings-guidance
+    title: Goldman Sachs 2024 third-quarter results
+    summary: Goldman Sachs reported third-quarter 2024 results on October 15, 2024, defining an earnings window for comparison with large-bank and financial-sector trading.
+    sort_order: 10
+    event_session: "2024-10-15"
+    source_dates: ["2024-10-15"]
+    primary_ticker: GS
+    analysis_tickers: [GS, JPM, SCHW]
+    context_instruments: [XLF, SPY]
+    start_session: "2024-09-17"
+    end_session: "2024-10-29"
+    default_cutoff: "2024-10-15T20:00:00Z"
+    questions:
+      - question_id: gs-q3-2024-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did Goldman Sachs trade around its third-quarter 2024 results relative to recent history and financial benchmarks?
+      - question_id: gs-q3-2024-evidence
+        label: Review reported drivers
+        capability: evidence-review
+        text: Which cutoff-qualified reported business and profitability metrics were most relevant to Goldman Sachs' earnings window?
+      - question_id: gs-q3-2024-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did JPMorgan and Schwab trade around Goldman Sachs' results relative to GS, XLF, and SPY?
+      - question_id: gs-q3-2024-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which prior Goldman Sachs episodes best match this earnings-window return and volume profile, and where do they differ?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: gs-release-2024-10-15, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps:
+      - code: document_http
+        layer: documents
+        detail: The configured official Goldman Sachs release could not be captured from its current URL.
+      - code: unsupported_missing_company_release
+        layer: documents
+        detail: No cutoff-qualified Goldman Sachs company release is currently published for this event.
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: incomplete-event-evidence
+        detail: The official-release gap limits the available event narrative; the curated demo news set is selective rather than exhaustive.
+
+  - event_id: gs-earnings-2025-01-15
+    category_id: earnings-guidance
+    title: Goldman Sachs 2024 fourth-quarter results
+    summary: Goldman Sachs reported fourth-quarter and full-year 2024 results on January 15, 2025, defining an earnings window for financial-sector comparison.
+    sort_order: 11
+    event_session: "2025-01-15"
+    source_dates: ["2025-01-15"]
+    primary_ticker: GS
+    analysis_tickers: [GS, JPM, SCHW]
+    context_instruments: [XLF, SPY]
+    start_session: "2024-12-13"
+    end_session: "2025-01-30"
+    default_cutoff: "2025-01-15T21:00:00Z"
+    questions:
+      - question_id: gs-q4-2024-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did Goldman Sachs trade around its fourth-quarter 2024 results relative to recent history and financial benchmarks?
+      - question_id: gs-q4-2024-evidence
+        label: Review reported drivers
+        capability: evidence-review
+        text: Which cutoff-qualified revenue, earnings, and return metrics were most relevant to Goldman Sachs' earnings window?
+      - question_id: gs-q4-2024-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did JPMorgan and Schwab trade around Goldman Sachs' results relative to GS and XLF?
+      - question_id: gs-q4-2024-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which prior Goldman Sachs episodes best match this return and volume profile, and what makes the comparison imperfect?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: gs-release-2025-01-15, source_kinds: [company_release, filing]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps:
+      - code: document_http
+        layer: documents
+        detail: The configured official Goldman Sachs release could not be captured from its current URL.
+      - code: unsupported_missing_company_release
+        layer: documents
+        detail: No cutoff-qualified Goldman Sachs company release is currently published for this event.
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: incomplete-event-evidence
+        detail: The official-release gap limits the available event narrative; filing evidence and selected contemporaneous coverage remain available.
+
+  - event_id: schw-earnings-2025-01-21
+    category_id: earnings-guidance
+    title: Schwab 2024 fourth-quarter results
+    summary: Charles Schwab reported fourth-quarter and full-year 2024 results on January 21, 2025, defining a financial-sector window around assets, revenue, and earnings.
+    sort_order: 12
+    event_session: "2025-01-21"
+    source_dates: ["2025-01-21"]
+    primary_ticker: SCHW
+    analysis_tickers: [SCHW, JPM, GS]
+    context_instruments: [XLF, SPY]
+    start_session: "2024-12-18"
+    end_session: "2025-02-04"
+    default_cutoff: "2025-01-21T21:00:00Z"
+    questions:
+      - question_id: schw-q4-2024-move
+        label: Measure the earnings move
+        capability: move-measurement
+        text: How did Schwab trade around its fourth-quarter 2024 results relative to recent history and financial benchmarks?
+      - question_id: schw-q4-2024-evidence
+        label: Review reported drivers
+        capability: evidence-review
+        text: Which cutoff-qualified asset, revenue, and earnings disclosures were most relevant to Schwab's earnings-window move?
+      - question_id: schw-q4-2024-peers
+        label: Compare financial peers
+        capability: peer-comparison
+        text: How did JPMorgan and Goldman Sachs trade around Schwab's results relative to SCHW, XLF, and SPY?
+      - question_id: schw-q4-2024-analogues
+        label: Compare prior episodes
+        capability: historical-analogues
+        text: Which earlier Schwab episodes best match this earnings-window return and volume profile, and where do they differ?
+    source_requirements:
+      market: {required: true, required_fields: [adjusted_close, volume], price_basis: provider_adjusted}
+      documents: {required_for_ready: true, requirement_id: schw-release-2025-01-21, source_kinds: [company_release]}
+      licensed_news: {required_for_publication: false, required_for_ready: true, source_kind: licensed_news_metadata}
+      derived_features: {required_for_ready: true, features: [event-returns, relative-returns, volume-context, historical-analogues]}
+    known_gaps: []
+    limitations:
+      - limitation_id: reconstructed-market-history
+        detail: Market history is a later reconstruction and does not prove what a user could retrieve at the original cutoff.
+      - limitation_id: news-context-limited
+        detail: The curated demo corpus includes selected contemporaneous coverage, not an exhaustive market-commentary archive.

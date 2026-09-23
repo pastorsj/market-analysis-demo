@@ -1,0 +1,32 @@
+[
+  {
+    "cutoff": "2025-01-27T21:00:00Z",
+    "future_outcome_excluded": true,
+    "return_1d": -0.16968167,
+    "symbol": "NVDA"
+  },
+  {
+    "cutoff": "2025-01-27T21:00:00Z",
+    "future_outcome_excluded": true,
+    "return_1d": -0.06374145,
+    "symbol": "AMD"
+  },
+  {
+    "cutoff": "2025-01-27T21:00:00Z",
+    "future_outcome_excluded": true,
+    "return_1d": -0.08649268,
+    "symbol": "SOXX"
+  },
+  {
+    "cutoff": "2025-01-27T21:00:00Z",
+    "future_outcome_excluded": true,
+    "return_1d": -0.02754753,
+    "symbol": "QQQ"
+  },
+  {
+    "cutoff": "2025-01-27T21:00:00Z",
+    "future_outcome_excluded": true,
+    "return_1d": -0.01414543,
+    "symbol": "SPY"
+  }
+]

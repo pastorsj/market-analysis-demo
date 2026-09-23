@@ -1,0 +1,43 @@
+version: 1
+snapshot_kind: analytical-market-v3
+normalizer_version: 3
+calendar: XNYS
+timezone: America/New_York
+
+# This is a new broad transformation identity over an already immutable v2
+# capture. It does not mutate the capture or imply historical S&P membership.
+window:
+  start: "2010-01-04"
+  end_inclusive: "2026-09-18"
+source:
+  source_id: kaggle-sp500-v603
+  capture_id: capture-8fda6eb1d434e08a
+  capture_manifest_sha256: d7f29adeae068e3e55fbf6ac8d48d600404bbe4913ef76da158320aaf521e150
+  adapter_version: 4
+  member: SnP_daily_update.csv
+  member_bytes: 160951435
+  member_sha256: 376c9218424b27c183b7d657893a44f99460719d84c04ee152408711dc28eb3c
+  archive_bytes: 72318580
+  archive_sha256: fecd9407ac5729c13a37f30482107b98ea9fb5858755dd34774c206c6187fadd
+  attribution_url: https://www.kaggle.com/datasets/yash16jr/s-and-p500-daily-update-dataset
+  license_id: "CC0: Public Domain"
+  redistribution: allowed
+  vintage_status: reconstructed_later
+  membership_basis: member_header_current_constituents
+
+qualification:
+  minimum_instruments: 500
+  expected_instruments: 503
+  minimum_rows: 1900000
+  expected_rows: 1979692
+  expected_sessions: 4203
+  expected_full_history_instruments: 417
+  expected_partial_history_instruments: 86
+
+# Eight stable ticker buckets keep the 17 yearly partitions compact while
+# retaining ticker and date predicate pruning. The source is processed in small
+# session batches; no million-row Python object graph is built.
+partitioning:
+  ticker_buckets: 8
+  compression: zstd
+  batch_sessions: 32

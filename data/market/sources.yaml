@@ -1,0 +1,44 @@
+version: 1
+sources:
+  kaggle-sp500-v603:
+    adapter: kaggle_cc0
+    dataset_version: 603
+    dataset_ref: yash16jr/s-and-p500-daily-update-dataset
+    dataset_id: 6459880
+    download_url: https://www.kaggle.com/api/v1/datasets/download/yash16jr/s-and-p500-daily-update-dataset?datasetVersionNumber=603
+    metadata_url: https://www.kaggle.com/api/v1/datasets/view/yash16jr/s-and-p500-daily-update-dataset
+    attribution_url: https://www.kaggle.com/datasets/yash16jr/s-and-p500-daily-update-dataset
+    provider: Kaggle dataset by yash16jr
+    license_id: "CC0: Public Domain"
+    redistribution: allowed
+    archive_bytes: 72318580
+    archive_sha256: fecd9407ac5729c13a37f30482107b98ea9fb5858755dd34774c206c6187fadd
+    member: SnP_daily_update.csv
+    member_bytes: 160951435
+    member_sha256: 376c9218424b27c183b7d657893a44f99460719d84c04ee152408711dc28eb3c
+    header_rows: 3
+    price_basis: provider_adjusted
+    fields: [adjusted_open, adjusted_high, adjusted_low, adjusted_close, volume]
+    symbols: [NVDA, AMD, JPM, GS, SCHW, AVGO]
+    vintage_status: reconstructed_later
+  kaggle-equity-etfs-v669:
+    adapter: kaggle_cc0
+    dataset_version: 669
+    dataset_ref: unmoved/magnificent-7-past-10-years-prices-updated-daily
+    dataset_id: 6000857
+    download_url: https://www.kaggle.com/api/v1/datasets/download/unmoved/magnificent-7-past-10-years-prices-updated-daily?datasetVersionNumber=669
+    metadata_url: https://www.kaggle.com/api/v1/datasets/view/unmoved/magnificent-7-past-10-years-prices-updated-daily
+    attribution_url: https://www.kaggle.com/datasets/unmoved/magnificent-7-past-10-years-prices-updated-daily
+    provider: Kaggle dataset by unmoved
+    license_id: "CC0: Public Domain"
+    redistribution: allowed
+    archive_bytes: 724917
+    archive_sha256: 55743d8a4d8d9cadded04865b56e808a49eb67430566ba24eaca41a220c3f4a3
+    member: equity_etfs.csv
+    member_bytes: 1172738
+    member_sha256: 3771c2a82af67bd84639d8ec9b4a5f671e433ca61f9a5a46c2f98987c6926b41
+    header_rows: 1
+    price_basis: provider_adjusted
+    fields: [adjusted_close]
+    symbols: [SPY, QQQ, XLF]
+    vintage_status: reconstructed_later

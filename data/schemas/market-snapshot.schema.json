@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market-shock-market-snapshot-v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_kind", "snapshot_id", "normalizer_version", "gate", "data_tier", "vintage_status", "created_at", "captured_at", "requested_window", "observed_coverage", "calendar", "timezone", "universe", "benchmark_policy", "field_coverage", "universe_sha256", "actions_sha256", "sources", "artifacts", "quality"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "snapshot_kind": {"const": "market"},
+    "snapshot_id": {"type": "string", "pattern": "^market-[0-9a-f]{16}$"},
+    "normalizer_version": {"const": 2},
+    "gate": {"enum": ["fixture", "reconstruction", "release"]},
+    "data_tier": {"enum": ["ci_fixture", "cc0_reconstruction", "entitled_local"]},
+    "vintage_status": {"enum": ["archived_at_cutoff", "reconstructed_later", "unknown"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "requested_window": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end_exclusive"],
+      "properties": {"start": {"type": "string", "format": "date"}, "end_exclusive": {"type": "string", "format": "date"}}
+    },
+    "observed_coverage": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end_inclusive", "rows"],
+      "properties": {"start": {"type": "string", "format": "date"}, "end_inclusive": {"type": "string", "format": "date"}, "rows": {"type": "integer", "minimum": 1}}
+    },
+    "calendar": {"const": "XNYS"},
+    "timezone": {"const": "America/New_York"},
+    "universe": {"type": "object"},
+    "benchmark_policy": {"type": "object"},
+    "field_coverage": {"type": "object", "minProperties": 1},
+    "universe_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "actions_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sources": {"type": "array", "minItems": 1},
+    "artifacts": {
+      "type": "array", "minItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "sha256", "bytes", "records", "media_type"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(bars|lineage)/|^(instruments|sessions|actions|coverage)\\.parquet$|^quality\\.json$"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 0},
+          "records": {"type": "integer", "minimum": 0},
+          "media_type": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "quality": {"type": "object"}
+  }
+}

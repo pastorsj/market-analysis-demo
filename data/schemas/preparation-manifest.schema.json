@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market-shock-preparation-manifest",
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "snapshot_id", "manifest_sha256"],
+      "properties": {
+        "path": {"type": "string"}, "snapshot_id": {"type": "string"},
+        "manifest_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "embedding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model_id", "revision", "tokenizer_revision", "dimension", "model_dtype", "storage_dtype", "query_role", "passage_role", "normalized", "max_tokens", "implementation"],
+      "properties": {
+        "model_id": {"const": "nvidia/Nemotron-3-Embed-1B-BF16"},
+        "revision": {"const": "9e0b24858b1195815ecb1188ffa1b73bcea7b30a"},
+        "tokenizer_revision": {"const": "9e0b24858b1195815ecb1188ffa1b73bcea7b30a"},
+        "dimension": {"const": 2048}, "model_dtype": {"const": "bfloat16"},
+        "storage_dtype": {"const": "float32"}, "query_role": {"const": "query"},
+        "passage_role": {"const": "passage"}, "normalized": {"const": true},
+        "max_tokens": {"const": 4096},
+        "implementation": {"enum": ["pinned_model", "pending_gpu", "deterministic_fake_test_only"]}
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "bytes", "media_type", "records", "source_ids"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(raw|processed|indexes|models|reports|logs|market|documents|readiness)/"},
+        "sha256": {"$ref": "#/$defs/digest"}, "bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"type": "string"}, "records": {"type": "integer", "minimum": 0},
+        "source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "scenario_id", "snapshot_id", "fixture_tier", "created_at", "supported_universe", "date_coverage", "embedding", "artifacts"],
+      "properties": {
+        "schema_version": {"const": 1}, "scenario_id": {"const": "deepseek-nvda-v1"},
+        "snapshot_id": {"const": "market-shock-corpus-v1"}, "fixture_tier": {"enum": ["ci", "booth"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "supported_universe": {"type": "array", "uniqueItems": true, "minItems": 5, "items": {"type": "string"}},
+        "date_coverage": {
+          "type": "object", "additionalProperties": false, "required": ["start", "end", "timezone", "calendar"],
+          "properties": {
+            "start": {"type": "string", "format": "date"}, "end": {"type": "string", "format": "date"},
+            "timezone": {"const": "America/New_York"}, "calendar": {"const": "XNYS"}
+          }
+        },
+        "embedding": {"$ref": "#/$defs/embedding"},
+        "artifacts": {"type": "array", "minItems": 6, "items": {"$ref": "#/$defs/artifact"}}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "scenario_id", "snapshot_id", "recipe_version", "data_tier", "vintage_status", "created_at", "cutoff_policy", "coverage", "market", "documents", "readiness", "embedding", "semantic", "artifacts"],
+      "properties": {
+        "schema_version": {"const": 2},
+        "recipe_version": {"const": 3},
+        "scenario_id": {"type": "string", "pattern": "^market-shock-v2-[0-9a-f]{16}$"},
+        "snapshot_id": {"type": "string", "pattern": "^market-shock-v2-[0-9a-f]{16}$"},
+        "data_tier": {"enum": ["cc0_reconstruction", "entitled_local"]},
+        "vintage_status": {"enum": ["archived_at_cutoff", "reconstructed_later"]},
+        "created_at": {"type": "string", "format": "date-time"},
+        "cutoff_policy": {"const": "observation_or_published_at_lte_case_cutoff"},
+        "coverage": {"type": "object"},
+        "market": {"$ref": "#/$defs/binding"}, "documents": {"$ref": "#/$defs/binding"},
+        "readiness": {"type": "object"}, "embedding": {"$ref": "#/$defs/embedding"},
+        "semantic": {"type": "object"},
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}}
+      }
+    }
+  ]
+}

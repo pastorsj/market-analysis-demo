@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market-shock-source-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "sources"],
+  "properties": {
+    "version": {"const": 1},
+    "sources": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "provider", "canonical_url", "license_id", "redistribution", "content_sha256", "retrieved_at"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$"},
+          "kind": {"enum": ["market", "news_metadata", "filing", "company_release", "primary_source", "relations"]},
+          "provider": {"type": "string", "minLength": 1},
+          "canonical_url": {"type": "string", "pattern": "^https://"},
+          "license_id": {"type": "string", "minLength": 1},
+          "redistribution": {"enum": ["allowed", "metadata_only", "local_only", "blocked"]},
+          "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "published_at": {"type": "string", "format": "date-time"},
+          "retrieved_at": {"type": "string", "format": "date-time"},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

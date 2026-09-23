@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+usage() {
+  cat <<'EOF'
+Usage: ./demo <command>
+
+Commands:
+  start         Start prepared artifacts (`--recreate-agent` after a source refresh)
+  doctor        Check host, GPU, artifacts, images, services, and port safely
+  status        Show the public runtime status
+  stop          Stop containers while preserving models, data, and caches
+  help          Show this help
+
+Running ./demo with no command starts and verifies the prepared application.
+Model and data provisioning is intentionally not distributed in this public
+source snapshot; start expects an already prepared DGX Spark runtime.
+EOF
+}
+COMMAND=${1:-start}
+[[ $# -eq 0 ]] || shift
+case "$COMMAND" in
+  start) exec "$ROOT/scripts/spark/start.sh" "$@";;
+  doctor) exec "$ROOT/scripts/spark/doctor.sh" "$@";;
+  status) exec "$ROOT/scripts/spark/status.sh" "$@";;
+  stop) exec "$ROOT/scripts/spark/stop.sh" "$@";;
+  -h|--help|help) usage;;
+  *) usage >&2; exit 2;;
+esac

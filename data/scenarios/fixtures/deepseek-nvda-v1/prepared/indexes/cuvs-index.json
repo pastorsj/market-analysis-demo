@@ -1,0 +1,8 @@
+{
+  "dimension": 2048,
+  "fixture_only": true,
+  "kind": "brute_force_rebuild_at_lifespan",
+  "metric": "inner_product",
+  "normalized": true,
+  "rows": 5
+}

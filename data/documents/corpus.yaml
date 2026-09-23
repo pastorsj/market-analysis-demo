@@ -1,0 +1,224 @@
+version: 1
+issuers:
+  NVDA: {cik: "0001045810", official_hosts: [nvidianews.nvidia.com]}
+  AMD: {cik: "0000002488", official_hosts: [ir.amd.com]}
+  JPM: {cik: "0000019617", official_hosts: [jpmorganchase.com, www.jpmorganchase.com]}
+  GS: {cik: "0000886982", official_hosts: [goldmansachs.com, www.goldmansachs.com]}
+  SCHW: {cik: "0000316709", official_hosts: [pressroom.aboutschwab.com]}
+public_authorities:
+  FED: {official_hosts: [www.federalreserve.gov]}
+sec:
+  submissions_url_template: https://data.sec.gov/submissions/CIK{cik}.json
+  submissions_archive_url_template: https://data.sec.gov/submissions/{name}
+  archive_url_template: https://www.sec.gov/Archives/edgar/data/{cik_int}/{accession_compact}/{primary_document}
+  forms: [10-K, 10-Q, 8-K]
+  start: "2022-01-03"
+  end_exclusive: "2026-09-19"
+company_releases:
+  - source_id: nvidia-fy2027-q2-results-20260826
+    issuer_id: NVDA
+    event_id: nvda-earnings-2026-08-27
+    source_kind: company_release
+    canonical_url: https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-second-quarter-fiscal-2027
+    title: NVIDIA second-quarter fiscal 2027 results
+    publication_proof:
+      kind: official_body_date
+      date: "2026-08-26"
+      body_markers: ["NVIDIA Announces Financial Results for Second Quarter Fiscal 2027", "August 26, 2026"]
+    summary: "Project-authored summary: NVIDIA reported second-quarter fiscal 2027 revenue of $96.2 billion, Data Center revenue of $89.0 billion, and its outlook for the following quarter."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: federal-reserve-fomc-statement-20260916
+    issuer_id: JPM
+    source_authority_id: FED
+    event_id: fed-rate-hike-2026-09-16
+    source_kind: primary_source
+    canonical_url: https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm
+    title: Federal Reserve issues September 2026 FOMC statement
+    publication_proof:
+      kind: official_body_date
+      date: "2026-09-16"
+      body_markers: ["Federal Reserve issues FOMC statement", "September 16, 2026"]
+    summary: "Project-authored summary: The Federal Reserve raised the target range for the federal funds rate by one quarter percentage point to 3.75% to 4.00%."
+    license_id: public-record
+    redistribution: metadata_only
+  - source_id: nvidia-deepseek-statement-20250127
+    issuer_id: NVDA
+    event_id: nvda-deepseek-2025-01-27
+    source_kind: company_release
+    canonical_url: https://nvidianews.nvidia.com/news/statement-on-deepseek-r1
+    title: NVIDIA statement on DeepSeek R1
+    publication_proof:
+      kind: official_body_date
+      date: "2025-01-27"
+      body_markers: ["Statement on DeepSeek R1", "January 27, 2025"]
+    summary: "Project-authored summary: NVIDIA characterized DeepSeek R1 as an AI advance and stated that inference still requires significant NVIDIA GPUs and networking."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: nvidia-fy2025-q2-results-20240828
+    issuer_id: NVDA
+    event_id: nvda-earnings-2024-08-28
+    source_kind: company_release
+    canonical_url: https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-second-quarter-fiscal-2025
+    title: NVIDIA second-quarter fiscal 2025 results
+    publication_proof:
+      kind: official_body_date
+      date: "2024-08-28"
+      body_markers: ["NVIDIA Announces Financial Results for Second Quarter Fiscal 2025", "August 28, 2024"]
+    summary: "Project-authored summary: NVIDIA reported second-quarter fiscal 2025 results and discussed data-center demand and its outlook."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: amd-fy2024-q4-results-20250204
+    issuer_id: AMD
+    event_id: amd-earnings-2025-02-04
+    source_kind: company_release
+    canonical_url: https://ir.amd.com/news-events/press-releases/detail/1236/amd-reports-fourth-quarter-and-full-year-2024-financial-results
+    title: AMD fourth-quarter and full-year 2024 results
+    publication_proof:
+      kind: official_body_date
+      date: "2025-02-04"
+      body_markers: ["AMD Reports Fourth Quarter and Full Year 2024 Financial Results", "February 4, 2025"]
+    summary: "Project-authored summary: AMD reported record 2024 revenue, described strong growth in data-center revenue, and gave its first-quarter 2025 outlook."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: amd-mi308-export-control-20250416
+    issuer_id: AMD
+    event_id: amd-event-2025-04-16
+    source_kind: primary_source
+    canonical_url: https://www.sec.gov/Archives/edgar/data/2488/000000248825000039/amd-20250415.htm
+    title: AMD current report concerning MI308 export controls
+    publication_proof:
+      kind: sec_submission_acceptance
+      accession: 0000002488-25-000039
+      document: amd-20250415.htm
+      document_role: primary
+      body_markers: ["MI308", "license requirement"]
+    summary: "Project-authored summary: AMD disclosed a new export-license requirement for MI308 products and estimated related charges of up to approximately $800 million."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: jpm-fy2024-q4-results-20250115
+    issuer_id: JPM
+    event_id: jpm-earnings-2025-01-15
+    source_kind: company_release
+    canonical_url: https://www.sec.gov/Archives/edgar/data/19617/000001961725000040/a4q24erfexhibit991narrative.htm
+    title: JPMorganChase fourth-quarter 2024 earnings release
+    publication_proof:
+      kind: sec_submission_acceptance
+      accession: 0000019617-25-000040
+      document: a4q24erfexhibit991narrative.htm
+      document_role: accession_document
+      body_markers: ["JPMORGANCHASE REPORTS FOURTH-QUARTER 2024", "January 15, 2025"]
+    summary: "Project-authored summary: JPMorganChase reported fourth-quarter 2024 net income and described performance across its consumer, commercial and investment-banking businesses."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: jpm-2025-q1-results-20250411
+    issuer_id: JPM
+    event_id: jpm-earnings-2025-04-11
+    source_kind: company_release
+    canonical_url: https://www.sec.gov/Archives/edgar/data/19617/000001961725000332/a1q25erfexhibit991narrative.htm
+    title: JPMorganChase first-quarter 2025 earnings release
+    publication_proof:
+      kind: sec_submission_acceptance
+      accession: 0000019617-25-000332
+      document: a1q25erfexhibit991narrative.htm
+      document_role: accession_document
+      body_markers: ["JPMORGANCHASE REPORTS FIRST-QUARTER 2025", "April 11, 2025"]
+    summary: "Project-authored summary: JPMorganChase reported first-quarter 2025 results and discussed revenue, credit costs and performance across its businesses."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: gs-2024-q3-results-20241015
+    issuer_id: GS
+    event_id: gs-earnings-2024-10-15
+    source_kind: company_release
+    canonical_url: https://www.goldmansachs.com/pressroom/press-releases/2024/2024-10-15-q3-results
+    title: Goldman Sachs third-quarter 2024 earnings results
+    publication_proof:
+      kind: official_body_date
+      date: "2024-10-15"
+      body_markers: ["Goldman Sachs Reports 2024 Third Quarter Earnings Per Common Share", "October 15, 2024"]
+    summary: "Project-authored summary: Goldman Sachs reported third-quarter net revenues, earnings and return on equity and described results across its franchises."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: gs-fy2024-q4-results-20250115
+    issuer_id: GS
+    event_id: gs-earnings-2025-01-15
+    source_kind: company_release
+    canonical_url: https://www.goldmansachs.com/pressroom/press-releases/2025/2025-01-15-q4-results
+    title: Goldman Sachs full-year and fourth-quarter 2024 earnings results
+    publication_proof:
+      kind: official_body_date
+      date: "2025-01-15"
+      body_markers: ["Goldman Sachs Reports 2024 Full Year and Fourth Quarter Earnings", "January 15, 2025"]
+    summary: "Project-authored summary: Goldman Sachs reported full-year and fourth-quarter 2024 net revenues, earnings per share and return on equity."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: schw-bank-shock-update-20230313
+    issuer_id: SCHW
+    event_id: schw-bank-shock-2023-03-13
+    source_kind: company_release
+    canonical_url: https://pressroom.aboutschwab.com/press-releases/press-release/2023/Schwab-Reports-Monthly-Activity-Highlights-e564be671/default.aspx
+    title: Schwab monthly activity and liquidity update
+    publication_proof:
+      kind: q4_press_release_feed
+      year: 2023
+      press_release_id: 3023
+      revision_number: 40751
+      workflow_id: 1fb1776f-30da-4bd6-8bed-8fa2d4796133
+      timezone: America/New_York
+      headline: Schwab Reports Monthly Activity Highlights
+      link_path: /press-releases/press-release/2023/Schwab-Reports-Monthly-Activity-Highlights-e564be671/default.aspx
+      body_markers: ["Schwab Reports Monthly Activity Highlights", "03/13/2023"]
+    summary: "Project-authored summary: Schwab reported February activity and described deposit composition, liquidity sources and balance-sheet positioning during the regional-bank shock."
+    license_id: company-copyright
+    redistribution: metadata_only
+  - source_id: schw-fy2024-q4-results-20250121
+    issuer_id: SCHW
+    event_id: schw-earnings-2025-01-21
+    source_kind: company_release
+    canonical_url: https://pressroom.aboutschwab.com/press-releases/press-release/2025/Schwab-Reports-Fourth-Quarter-and-Full-Year-Results/default.aspx
+    title: Schwab fourth-quarter and full-year 2024 results
+    publication_proof:
+      kind: q4_press_release_feed
+      year: 2025
+      press_release_id: 4142
+      revision_number: 42946
+      workflow_id: 572e76a0-daeb-4ab8-9474-f0e4f6034ad2
+      timezone: America/New_York
+      headline: Schwab Reports Fourth Quarter and Full Year Results
+      link_path: /press-releases/press-release/2025/Schwab-Reports-Fourth-Quarter-and-Full-Year-Results/default.aspx
+      body_markers: ["Schwab Reports Fourth Quarter and Full Year Results", "01/21/2025"]
+    summary: "Project-authored summary: Schwab reported fourth-quarter net income, net new assets, revenue growth and adjusted earnings per share."
+    license_id: company-copyright
+    redistribution: metadata_only
+requirements:
+  - {requirement_id: nvda-release-2026-08-31, issuer_id: NVDA, event_id: nvda-earnings-2026-08-27, source_kinds: [company_release], cutoff: "2026-08-31T20:00:00Z"}
+  - {requirement_id: fed-primary-2026-09-16, issuer_id: JPM, event_id: fed-rate-hike-2026-09-16, source_kinds: [primary_source], cutoff: "2026-09-18T20:00:00Z"}
+  - {requirement_id: nvda-primary-2025-01-27, issuer_id: NVDA, event_id: nvda-deepseek-2025-01-27, source_kinds: [company_release], cutoff: "2025-01-27T21:00:00Z"}
+  - requirement_id: nvda-release-2024-08-29
+    issuer_id: NVDA
+    event_id: nvda-earnings-2024-08-28
+    source_kinds: [company_release, filing]
+    cutoff: "2024-08-29T20:00:00Z"
+    filing_summary: "Project-authored summary: NVIDIA's event filing furnished its second-quarter fiscal 2025 results, including data-center performance and forward-looking guidance."
+  - {requirement_id: amd-release-2025-02-05, issuer_id: AMD, event_id: amd-earnings-2025-02-04, source_kinds: [company_release], cutoff: "2025-02-05T21:00:00Z"}
+  - {requirement_id: amd-primary-2025-04-16, issuer_id: AMD, event_id: amd-event-2025-04-16, source_kinds: [primary_source], cutoff: "2025-04-16T20:00:00Z"}
+  - requirement_id: jpm-release-2025-01-15
+    issuer_id: JPM
+    event_id: jpm-earnings-2025-01-15
+    source_kinds: [company_release, filing]
+    cutoff: "2025-01-15T21:00:00Z"
+    filing_summary: "Project-authored summary: JPMorganChase's event filing furnished fourth-quarter 2024 results, including net income and performance across its businesses."
+  - {requirement_id: jpm-release-2025-04-11, issuer_id: JPM, event_id: jpm-earnings-2025-04-11, source_kinds: [company_release], cutoff: "2025-04-11T20:00:00Z"}
+  - requirement_id: gs-release-2025-01-15
+    issuer_id: GS
+    event_id: gs-earnings-2025-01-15
+    source_kinds: [company_release, filing]
+    cutoff: "2025-01-15T21:00:00Z"
+    filing_summary: "Project-authored summary: Goldman Sachs' event filing furnished full-year and fourth-quarter 2024 results, including net revenues, earnings per share and return on equity."
+  - {requirement_id: gs-release-2024-10-15, issuer_id: GS, event_id: gs-earnings-2024-10-15, source_kinds: [company_release], cutoff: "2024-10-15T20:00:00Z"}
+  - {requirement_id: schw-release-2025-01-21, issuer_id: SCHW, event_id: schw-earnings-2025-01-21, source_kinds: [company_release], cutoff: "2025-01-21T21:00:00Z"}
+  - {requirement_id: schw-primary-2023-03-13, issuer_id: SCHW, event_id: schw-bank-shock-2023-03-13, source_kinds: [company_release], cutoff: "2023-03-13T20:00:00Z"}
+licensed_news:
+  required_for_release: false
+  absent_gap: unsupported_missing_news
+  mapping: data/documents/demo-news.yaml

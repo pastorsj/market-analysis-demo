@@ -1,0 +1,19 @@
+version: 1
+calendar: XNYS
+timezone: America/New_York
+targets:
+  - {symbol: NVDA, sector: semiconductor}
+  - {symbol: AMD, sector: semiconductor}
+  - {symbol: JPM, sector: financial}
+  - {symbol: GS, sector: financial}
+  - {symbol: SCHW, sector: financial}
+peers: [AVGO]
+required_benchmarks: [SPY, QQQ, XLF]
+optional_instruments: [TSM, ASML, ARM, SOXX, KBE, KRE]
+benchmark_policy:
+  semiconductor:
+    required: [QQQ, SPY]
+    optional: [SOXX]
+  financial:
+    required: [XLF, SPY]
+    optional: [KBE, KRE]

@@ -1,0 +1,58 @@
+{
+  "edges": [
+    {
+      "evidence_note": "Compete in accelerated-computing markets",
+      "from_id": "NVDA",
+      "relation": "competitor",
+      "source_id": "sec-nvda-10q-20241120",
+      "to_id": "AMD",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    },
+    {
+      "evidence_note": "Semiconductor equipment exposure",
+      "from_id": "NVDA",
+      "relation": "upstream_equipment",
+      "source_id": "sec-nvda-10q-20241120",
+      "to_id": "ASML",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    },
+    {
+      "evidence_note": "Technology-heavy benchmark comparison",
+      "from_id": "NVDA",
+      "relation": "growth_benchmark",
+      "source_id": "fixture-market-facts-v1",
+      "to_id": "QQQ",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    },
+    {
+      "evidence_note": "Semiconductor-sector comparison",
+      "from_id": "NVDA",
+      "relation": "sector_benchmark",
+      "source_id": "fixture-market-facts-v1",
+      "to_id": "SOXX",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    },
+    {
+      "evidence_note": "Broad-market comparison",
+      "from_id": "NVDA",
+      "relation": "market_benchmark",
+      "source_id": "fixture-market-facts-v1",
+      "to_id": "SPY",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    },
+    {
+      "evidence_note": "Manufacturing supply-chain relationship",
+      "from_id": "NVDA",
+      "relation": "supplier",
+      "source_id": "sec-nvda-10q-20241120",
+      "to_id": "TSM",
+      "valid_from": "2017-01-01",
+      "valid_to": ""
+    }
+  ]
+}

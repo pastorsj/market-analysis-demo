@@ -1,0 +1,59 @@
+version: 1
+sources:
+  - id: fixture-market-facts-v1
+    kind: market
+    provider: project-curated-public-facts
+    canonical_url: https://www.nasdaq.com/market-activity/stocks/nvda/historical
+    license_id: factual-numeric-data
+    redistribution: allowed
+    content_sha256: 7b3a490b97c5ac94af0671d6871103c08e51471b0baccd1d72183a034b316885
+    retrieved_at: '2026-09-13T00:00:00Z'
+    notes: Small project-authored factual fixture; not a licensed booth market feed.
+  - id: nvidia-deepseek-statement-20250127
+    kind: company_release
+    provider: NVIDIA
+    canonical_url: https://nvidianews.nvidia.com/news/statement-on-deepseek-r1
+    license_id: project-authored-summary
+    redistribution: allowed
+    content_sha256: 2b9dc120eb16a064f251e511dd52f76712ce40ee5dbf5ed08d6146f7b9fa7077
+    published_at: '2025-01-27T21:00:00Z'
+    retrieved_at: '2026-09-13T00:00:00Z'
+    notes: Fixture stores an original short summary, not copied article text.
+  - id: white-house-deepseek-20250128
+    kind: primary_source
+    provider: The White House
+    canonical_url: https://www.whitehouse.gov/remarks/2025/01/remarks-by-president-trump-at-house-republicans-conference/
+    license_id: us-government-public-domain
+    redistribution: allowed
+    content_sha256: a219cd916816a8fd314d1bd26d623dac9cd5695040669704b82bcbbd7170ea82
+    published_at: '2025-01-28T00:00:00Z'
+    retrieved_at: '2026-09-13T00:00:00Z'
+  - id: sec-nvda-10q-20241120
+    kind: filing
+    provider: U.S. SEC EDGAR
+    canonical_url: https://www.sec.gov/Archives/edgar/data/1045810/000104581024000316/nvda-20241027.htm
+    license_id: us-government-public-domain
+    redistribution: allowed
+    content_sha256: 0b25fdd46503de65975e1aa485867fb1b975731fed5e80af37dc28ccfcb06b39
+    published_at: '2024-11-20T21:10:00Z'
+    retrieved_at: '2026-09-13T00:00:00Z'
+  - id: microsoft-fy25-q2-20250129
+    kind: company_release
+    provider: Microsoft
+    canonical_url: https://www.microsoft.com/en-us/Investor/earnings/FY-2025-Q2/press-release-webcast
+    license_id: metadata-and-project-authored-summary
+    redistribution: allowed
+    content_sha256: 045726c5c673142c22c2e160961392953cc8ad2c47e560fa9fcc5f1df76e8f83
+    published_at: '2025-01-29T21:00:00Z'
+    retrieved_at: '2026-09-13T00:00:00Z'
+    notes: Later evidence used to test cutoff exclusion and hindsight labeling.
+  - id: asml-q4-2024-results-20250129
+    kind: company_release
+    provider: ASML
+    canonical_url: https://www.asml.com/en/news/press-releases/2025/q4-2024-financial-results-dd3ac76a9d4d-4c35-b1d1-9ec7db1f87fa
+    license_id: metadata-and-project-authored-summary
+    redistribution: allowed
+    content_sha256: bdd08948be17af926f5acef47e08353c23e467bef49c70e047d2449479ba7191
+    published_at: '2025-01-29T06:00:00Z'
+    retrieved_at: '2026-09-13T00:00:00Z'
+    notes: Later evidence used to test cutoff exclusion and hindsight labeling.

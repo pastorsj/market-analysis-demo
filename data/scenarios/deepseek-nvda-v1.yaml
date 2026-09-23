@@ -1,0 +1,31 @@
+version: 1
+id: deepseek-nvda-v1
+title: January 2025 NVIDIA and DeepSeek semiconductor shock
+snapshot_id: market-shock-corpus-v1
+fixture_notice: >-
+  Redistributable CI fixture with factual daily market observations and
+  project-authored evidence summaries. It is not a substitute for the licensed
+  minute-bar and full-document booth corpus.
+timezone: America/New_York
+calendar: XNYS
+coverage: {start: '2024-12-02', end: '2025-02-14'}
+fixture_market_coverage: {start: '2025-01-24', end: '2025-01-30'}
+supported_universe: [NVDA, AMD, JPM, GS, SCHW]
+scenario_symbols: [NVDA, AMD, AVGO, ARM, TSM, ASML, SOXX, QQQ, SPY]
+primary_smoke:
+  case_id: shock-003
+  ticker: NVDA
+  as_of: '2025-01-27T21:00:00Z'
+  expected_scope: supported
+  required_capabilities: [price_context, news_search, peer_context]
+cutoff_policy:
+  eligible_when: available_at_lte_as_of
+  later_evidence_section: hindsight
+  publication_and_retrieval_are_distinct: true
+source_ids:
+  - fixture-market-facts-v1
+  - nvidia-deepseek-statement-20250127
+  - white-house-deepseek-20250128
+  - sec-nvda-10q-20241120
+  - microsoft-fy25-q2-20250129
+  - asml-q4-2024-results-20250129

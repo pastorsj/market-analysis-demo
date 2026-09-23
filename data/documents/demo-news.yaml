@@ -1,0 +1,20 @@
+# Demo-only reconstruction. The JSONL contains publisher metadata and
+# project-authored summaries, never copied article bodies.
+adapter: local_news_metadata
+vintage_status: reconstructed_later
+provider: Reuters public syndication pages
+attribution_url: https://www.reuters.com/
+license_id: demo-reconstruction-no-license-claim
+redistribution: metadata_only
+file:
+  # Stage the committed JSONL at this path before running `demo prepare`.
+  path: /srv/market-shock/input/demo-news-metadata.jsonl
+  sha256: fe81ca193a2d0090806ed458920f4875dc8bda9e133d0c265450b3f9250fc9a9
+columns:
+  issuer_id: issuer_id
+  event_id: event_id
+  title: title
+  canonical_url: canonical_url
+  published_at: published_at
+  published_at_precision: published_at_precision
+  summary: project_authored_summary

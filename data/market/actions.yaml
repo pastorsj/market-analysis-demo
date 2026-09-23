@@ -1,0 +1,20 @@
+version: 1
+actions:
+  - instrument_id: NVDA
+    action_type: split
+    factor: 10.0
+    published_at: "2024-05-22T20:05:00Z"
+    effective_at: "2024-06-10T13:30:00Z"
+    captured_at: "2026-09-13T00:00:00Z"
+    vintage_status: reconstructed_later
+    attribution_url: https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-first-quarter-fiscal-2025
+    source_sha256: d9b7fe266377956e271e320f386a7a92b81d5d4dcc9a586721e04f863334cd39
+  - instrument_id: AVGO
+    action_type: split
+    factor: 10.0
+    published_at: "2024-06-12T20:15:00Z"
+    effective_at: "2024-07-15T13:30:00Z"
+    captured_at: "2026-09-13T00:00:00Z"
+    vintage_status: reconstructed_later
+    attribution_url: https://investors.broadcom.com/news-releases/news-release-details/broadcom-inc-announces-second-quarter-fiscal-year-2024
+    source_sha256: 61e4ee5a31df709745124738468a837cff895aee98cd413b579fa4fb674bc705

@@ -1,0 +1,12 @@
+{
+  "embedding_ids": [
+    "ev-53eaa91ac07793374bf6-c0",
+    "ev-d8e5c0d80329a14514c0-c0",
+    "ev-404517bb78a15e56ebbc-c0",
+    "ev-48a3237424a5b9dfd489-c0",
+    "ev-8ef9beeb17aa3b2b034b-c0"
+  ],
+  "fit_split": "development",
+  "gpu_required_for_booth": true,
+  "seed": 20250127
+}

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market-shock-market-source-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "sources"],
+  "properties": {
+    "version": {"const": 1},
+    "sources": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["adapter", "dataset_version", "download_url", "metadata_url", "attribution_url", "provider", "license_id", "redistribution", "archive_bytes", "archive_sha256", "member", "member_bytes", "member_sha256", "header_rows", "price_basis", "fields", "symbols", "vintage_status"],
+        "properties": {
+          "adapter": {"const": "kaggle_cc0"},
+          "dataset_version": {"type": "integer", "minimum": 1},
+          "download_url": {"type": "string", "pattern": "^https://www\\.kaggle\\.com/api/v1/datasets/download/.+[?&]datasetVersionNumber=[0-9]+$"},
+          "metadata_url": {"type": "string", "pattern": "^https://www\\.kaggle\\.com/api/v1/datasets/view/.+[?&]datasetVersionNumber=[0-9]+$"},
+          "attribution_url": {"type": "string", "pattern": "^https://www\\.kaggle\\.com/datasets/"},
+          "provider": {"type": "string", "minLength": 1},
+          "license_id": {"const": "CC0: Public Domain"},
+          "redistribution": {"const": "allowed"},
+          "archive_bytes": {"type": "integer", "minimum": 1},
+          "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "member": {"type": "string", "pattern": "^[^/]+\\.csv$"},
+          "member_bytes": {"type": "integer", "minimum": 1},
+          "member_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "header_rows": {"enum": [1, 3]},
+          "price_basis": {"const": "provider_adjusted"},
+          "fields": {"type": "array", "uniqueItems": true, "items": {"enum": ["adjusted_open", "adjusted_high", "adjusted_low", "adjusted_close", "volume"]}},
+          "symbols": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z.]+$"}},
+          "vintage_status": {"const": "reconstructed_later"}
+        }
+      }
+    }
+  }
+}

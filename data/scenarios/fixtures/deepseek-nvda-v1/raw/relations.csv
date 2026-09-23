@@ -1,0 +1,7 @@
+from_id,to_id,relation,valid_from,valid_to,source_id,evidence_note
+NVDA,AMD,competitor,2017-01-01,,sec-nvda-10q-20241120,Compete in accelerated-computing markets
+NVDA,TSM,supplier,2017-01-01,,sec-nvda-10q-20241120,Manufacturing supply-chain relationship
+NVDA,ASML,upstream_equipment,2017-01-01,,sec-nvda-10q-20241120,Semiconductor equipment exposure
+NVDA,SOXX,sector_benchmark,2017-01-01,,fixture-market-facts-v1,Semiconductor-sector comparison
+NVDA,QQQ,growth_benchmark,2017-01-01,,fixture-market-facts-v1,Technology-heavy benchmark comparison
+NVDA,SPY,market_benchmark,2017-01-01,,fixture-market-facts-v1,Broad-market comparison
