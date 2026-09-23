@@ -331,12 +331,16 @@ def resolve_bound_policy(
     supported = decision.kind == PolicyKind.SUPPORTED
     if not supported:
         return replace(decision, request=canonical)
+    market_as_of = min(
+        datetime.combine(event.event_session, time(23, 59, 59), timezone.utc),
+        event.default_cutoff,
+    )
     scope = decision.scope.model_copy(update={
         "status": "supported",
         "action": "answer",
         "ticker": event.primary_ticker,
         "as_of": event.default_cutoff,
-        "market_as_of": datetime.combine(event.event_session, time(23, 59, 59), timezone.utc),
+        "market_as_of": market_as_of,
         "resolved_tickers": event.analysis_tickers,
         "group_key": None,
         "explanation": label,
