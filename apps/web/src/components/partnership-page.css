@@ -1,0 +1,253 @@
+.partnership-page {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 8% 0%, #edf6e2 0, transparent 29%),
+    radial-gradient(circle at 94% 3%, #e9f5fd 0, transparent 27%),
+    #f5f6f7;
+}
+
+.partnership-story {
+  width: min(1600px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: clamp(10px, 1.2vh, 16px) clamp(24px, 3vw, 56px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  gap: clamp(11px, 1.35vh, 16px);
+}
+
+.story-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 380px);
+  gap: clamp(36px, 4.5vw, 72px);
+  align-items: center;
+}
+
+.story-hero-copy { min-width: 0; }
+.story-partner-lockup { min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 18px; border-left: 3px solid #76b900; padding: 14px 0 14px 42px; color: #7b858c; font-size: 24px; }
+.story-nvidia-logo { width: 112px; height: 66px; object-fit: contain; }
+.story-langchain-logo { display: inline-flex; align-items: center; gap: 11px; }
+.story-langchain-logo img { width: 42px; height: 42px; object-fit: contain; }
+.story-langchain-logo strong { color: #17202a; font-size: 27px; letter-spacing: -.025em; }
+.story-kicker, .story-section-label { margin: 7px 0 0; color: #477700; font-size: 12px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+.story-kicker { display: none; }
+.story-hero h1 { max-width: 1040px; margin: 5px 0 0; font-size: clamp(36px, 3.05vw, 49px); font-weight: 650; line-height: 1.04; letter-spacing: -.045em; }
+.story-lead { max-width: 1040px; margin: 11px 0 0; color: #4a5660; font-size: clamp(15.5px, 1.18vw, 17.5px); line-height: 1.42; }
+
+.story-path {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dce1e4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 34px #1b2b3510;
+}
+.story-path-heading { display: flex; align-items: end; justify-content: space-between; gap: 28px; padding: 15px 22px 13px; border-bottom: 1px solid #e5e8ea; }
+.story-path-heading .story-section-label { margin: 0 0 2px; }
+.story-path-heading h2 { margin: 0; font-size: clamp(24px, 2vw, 31px); line-height: 1.12; letter-spacing: -.03em; }
+.story-path-heading > p { max-width: 420px; margin: 0; color: #626f77; font-size: 13.5px; line-height: 1.4; text-align: right; }
+.story-stages { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.story-stages > li { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 21px 18px 17px; }
+.story-stages > li + li { border-left: 1px solid #e5e8ea; }
+.story-stages > li::before { position: absolute; z-index: 0; top: 36px; left: calc(50% + 16px); right: calc(-50% + 16px); height: 2px; content: ""; background: linear-gradient(90deg, #76b900, #bfd899); }
+.story-stages > li:last-child::before { display: none; }
+.story-stages > li:nth-child(2)::before { background: linear-gradient(90deg, #76b900, #8bc5e8); }
+.story-stages > li:nth-child(3)::before { background: linear-gradient(90deg, #72b6df, #a9cbe0); }
+.story-stage-number { position: relative; z-index: 1; width: 32px; height: 32px; aspect-ratio: 1; display: grid; align-self: center; align-items: center; justify-content: center; border: 2px solid #76b900; border-radius: 50%; padding: 0; background: #fff; color: #365f00; font-size: 14px; font-weight: 850; font-variant-numeric: tabular-nums; line-height: 1; text-align: center; }
+.story-stages > li:nth-child(4) .story-stage-number { border-color: #6eb7e5; color: #255d80; }
+.story-stage-copy { min-height: 128px; display: flex; flex: 1; flex-direction: column; margin-top: 4px; }
+.story-stage-copy h3 { margin: 0; color: #18232b; font-size: clamp(18px, 1.42vw, 22px); line-height: 1.18; letter-spacing: -.02em; }
+.story-stage-copy p { margin: auto 0; padding-top: 10px; color: #4e5b64; font-size: clamp(14px, 1.08vw, 16px); line-height: 1.46; }
+.story-stage-copy strong { color: #17232b; font-weight: 800; }
+.story-stage-footer { display: flex; flex-direction: column; gap: 9px; }
+.story-technologies { display: flex; align-content: flex-start; flex-wrap: wrap; gap: 7px; }
+.technology-mark { max-width: 100%; min-height: 30px; display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 10px 4px 5px; background: #f1f4f5; color: #33424b; }
+.technology-logo { width: 30px; height: 22px; display: grid; flex: 0 0 30px; place-items: center; overflow: hidden; border-radius: 999px; background: #fff; }
+.technology-logo img { width: 27px; height: 19px; object-fit: contain; }
+.technology-mark-deepagents .technology-logo, .technology-mark-langgraph .technology-logo { width: 36px; flex-basis: 36px; border-radius: 4px; background: #172132; }
+.technology-mark-deepagents .technology-logo img, .technology-mark-langgraph .technology-logo img { width: 34px; height: 17px; object-fit: contain; }
+.technology-name { overflow: hidden; color: #2d3c45; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.technology-mark small { border-left: 1px solid #c7ced2; padding-left: 5px; color: #4c7416; font-size: 10px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.story-detail-button { width: fit-content; max-width: 100%; border: 0; padding: 3px 0; background: transparent; color: #3f7000; font-size: 14px; font-weight: 800; text-align: left; }
+.story-detail-button:hover { color: #284900; text-decoration: underline; text-underline-offset: 3px; }
+.story-detail-actions { display: flex; flex-wrap: wrap; gap: 7px 16px; }
+.story-live-state { color: #606d75; font-size: 11.5px; }
+.story-live-state[data-route-enabled="true"], .story-live-state[data-langsmith-enabled="true"] { color: #4d770f; }
+
+.story-outcomes {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.15fr) minmax(190px, .9fr) minmax(190px, .9fr) minmax(320px, 1.35fr);
+  align-items: stretch;
+  overflow: hidden;
+  border-radius: 13px;
+  color: #eef2f4;
+  background: #17232c;
+  box-shadow: 0 12px 30px #10202a1f;
+}
+.story-outcomes > * { min-width: 0; padding: 15px 20px; }
+.story-outcomes > * + * { border-left: 1px solid #ffffff18; }
+.story-outcome-heading { display: flex; flex-direction: column; justify-content: center; }
+.story-outcome-heading .story-section-label { margin: 0 0 6px; color: #93c94c; }
+.story-outcome-heading h2 { margin: 0; color: #fff; font-size: clamp(18px, 1.55vw, 24px); line-height: 1.15; letter-spacing: -.03em; }
+.story-outcomes article { display: flex; flex-direction: column; justify-content: center; }
+.story-outcomes article span { color: #a9d66f; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.story-outcomes article p { margin: 7px 0 0; color: #e0e5e8; font-size: 14px; line-height: 1.42; }
+.story-improvement-loop { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 7px 10px; background: linear-gradient(120deg, #20313d, #223847); text-align: center; }
+.story-improvement-loop strong { color: #fff; font-size: 13px; }
+.story-improvement-loop > span { color: #9dcc5f; }
+.story-improvement-loop small { flex-basis: 100%; color: #a9cce3; font-size: 11.5px; }
+.story-improvement-loop small strong { color: #c8e6f8; font-size: inherit; font-weight: 800; }
+
+@media (min-width: 1180px) {
+  .partnership-story { height: 100%; min-height: 0; }
+}
+
+.technology-dialog-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 18px; background: #0b141bc7; backdrop-filter: blur(5px); }
+.technology-dialog { width: min(940px, calc(100vw - 36px)); max-height: min(760px, calc(100vh - 36px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #dce2e5; border-radius: 14px; background: #fff; box-shadow: 0 28px 100px #0008; }
+.technology-dialog-header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-bottom: 1px solid #e2e6e8; padding: 10px 14px 10px 20px; }
+.technology-dialog-owner { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.technology-dialog-owner img { width: 55px; height: 34px; object-fit: contain; }
+.technology-dialog-owner span { color: #55727f; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.technology-dialog-close { width: 38px; height: 38px; display: grid; flex: 0 0 38px; place-items: center; border: 0; border-radius: 50%; background: #eef1f2; color: #34424a; font-size: 25px; line-height: 1; }
+.technology-dialog-close:hover { background: #e1e5e7; color: #101820; }
+.technology-dialog-scroll { overflow: auto; overscroll-behavior: contain; padding: 22px 26px 28px; }
+.technology-dialog-intro h2 { margin: 0; color: #17212a; font-size: clamp(27px, 3vw, 38px); line-height: 1.1; letter-spacing: -.035em; }
+.technology-dialog-intro p { max-width: 76ch; margin: 10px 0 0; color: #4e5a62; font-size: 15px; line-height: 1.55; }
+.technology-code { margin-top: 20px; overflow: hidden; border: 1px solid #263946; border-radius: 10px; background: #111b23; }
+.technology-code > header { min-height: 55px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid #2d404d; padding: 9px 12px 9px 16px; background: #17252f; }
+.technology-code > header div { min-width: 0; display: grid; gap: 2px; }
+.technology-code > header span { color: #9fc970; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.technology-code > header code { overflow: hidden; color: #dce6eb; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.technology-code > header button { flex-shrink: 0; border: 1px solid #526672; border-radius: 6px; padding: 6px 10px; background: #21323d; color: #edf3f5; font-size: 11px; font-weight: 700; }
+.technology-code > header button:hover { border-color: #82b641; background: #2b404b; }
+.technology-code pre { max-height: 330px; overflow: auto; margin: 0; padding: 17px 18px; color: #e6edf1; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.55; tab-size: 4; }
+.technology-code > p { margin: 0; border-top: 1px solid #2b3d48; padding: 9px 16px 11px; color: #a9b6bc; font-size: 11px; line-height: 1.45; }
+.technology-detail-note { margin-top: 16px; border-left: 3px solid #76b900; padding: 4px 0 4px 13px; }
+.technology-detail-note strong { color: #293740; font-size: 12px; }
+.technology-detail-note p { margin: 3px 0 0; color: #56636b; font-size: 13px; line-height: 1.5; }
+.technology-resources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 20px; }
+.technology-resources h3 { grid-column: 1 / -1; margin: 0 0 2px; color: #27343c; font-size: 14px; }
+.technology-resources a { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #dce1e4; border-radius: 8px; padding: 10px 12px; color: #2c4f64; text-decoration: none; }
+.technology-resources a:hover { border-color: #9ac76a; background: #f6faef; }
+.technology-resources a > span:first-child { min-width: 0; display: grid; gap: 2px; }
+.technology-resources a strong { font-size: 12.5px; }
+.technology-resources a small { color: #707b82; font-size: 10.5px; line-height: 1.35; }
+
+@media (min-width: 1180px) and (max-height: 820px) {
+  .partnership-story { padding-block: 10px; gap: 11px; }
+  .story-partner-lockup { min-height: 96px; gap: 15px; padding-left: 36px; font-size: 21px; }
+  .story-nvidia-logo { width: 96px; height: 56px; }
+  .story-langchain-logo img { width: 36px; height: 36px; }
+  .story-langchain-logo strong { font-size: 24px; }
+  .story-kicker { display: none; }
+  .story-hero h1 { margin-top: 3px; font-size: clamp(31px, 2.7vw, 38px); }
+  .story-lead { margin-top: 7px; font-size: 15px; line-height: 1.38; }
+  .story-path-heading { padding: 9px 18px 8px; }
+  .story-path-heading h2 { font-size: 25px; }
+  .story-path-heading > p { font-size: 12.5px; }
+  .story-stages > li { gap: 8px; padding: 11px 15px 7px; }
+  .story-stages > li::before { top: 24px; left: calc(50% + 14px); right: calc(-50% + 14px); }
+  .story-stage-number { width: 28px; height: 28px; font-size: 13px; }
+  .story-stage-copy { min-height: 106px; margin-top: 3px; }
+  .story-stage-copy h3 { font-size: 19.5px; }
+  .story-stage-copy p { margin-block: auto; padding-top: 8px; font-size: 15px; line-height: 1.4; }
+  .story-stage-footer { gap: 5px; }
+  .story-technologies { gap: 6px; }
+  .technology-mark { min-height: 27px; padding-block: 3px; }
+  .technology-logo { width: 28px; height: 21px; flex-basis: 28px; }
+  .technology-logo img { width: 25px; height: 18px; }
+  .technology-name { font-size: 13px; }
+  .story-detail-button { font-size: 14px; }
+  .story-detail-actions { gap: 6px 15px; }
+  .story-live-state { font-size: 11px; }
+  .story-outcomes > * { padding: 11px 19px; }
+  .story-outcomes article p { font-size: 14px; }
+  .story-improvement-loop strong { font-size: 12.5px; }
+  .story-improvement-loop small { font-size: 11px; }
+}
+
+@media (min-width: 1600px) and (min-height: 950px) {
+  .partnership-story { padding-block: 22px; gap: 18px; }
+  .story-partner-lockup { min-height: 150px; gap: 22px; padding-left: 46px; font-size: 28px; }
+  .story-nvidia-logo { width: 132px; height: 78px; }
+  .story-langchain-logo img { width: 49px; height: 49px; }
+  .story-langchain-logo strong { font-size: 31px; }
+  .story-hero h1 { margin-top: 8px; font-size: 52px; }
+  .story-lead { margin-top: 14px; font-size: 18px; }
+  .story-path-heading { padding: 19px 28px 17px; }
+  .story-path-heading h2 { font-size: 32px; }
+  .story-path-heading > p { max-width: 460px; font-size: 14.5px; }
+  .story-stages > li { gap: 18px; padding: 26px 22px 22px; }
+  .story-stages > li::before { top: 43px; left: calc(50% + 18px); right: calc(-50% + 18px); }
+  .story-stage-number { width: 36px; height: 36px; font-size: 15px; }
+  .story-stage-copy { min-height: 154px; margin-top: 6px; }
+  .story-stage-copy h3 { font-size: 24px; }
+  .story-stage-copy p { margin-block: auto; padding-top: 12px; font-size: 17px; }
+  .story-stage-footer { gap: 11px; }
+  .story-technologies { gap: 9px; }
+  .technology-mark { min-height: 34px; gap: 8px; padding: 5px 11px 5px 6px; }
+  .technology-logo { width: 33px; height: 24px; flex-basis: 33px; }
+  .technology-logo img { width: 30px; height: 21px; }
+  .technology-name { font-size: 14px; }
+  .story-detail-button { font-size: 15px; }
+  .story-live-state { font-size: 12.5px; }
+  .story-detail-actions { gap: 9px 18px; }
+  .story-outcomes > * { padding: 20px 24px; }
+  .story-outcome-heading h2 { font-size: 26px; }
+  .story-outcomes article p { font-size: 15.5px; }
+  .story-improvement-loop strong { font-size: 14px; }
+  .story-improvement-loop small { font-size: 12px; }
+}
+
+@media (max-width: 1179px) {
+  .partnership-story { display: flex; min-height: 100%; flex-direction: column; }
+  .story-hero { grid-template-columns: minmax(0, 1fr) 280px; align-items: center; }
+  .story-partner-lockup { min-height: 104px; gap: 12px; padding-left: 32px; font-size: 19px; }
+  .story-nvidia-logo { width: 82px; height: 49px; }
+  .story-langchain-logo { gap: 7px; }
+  .story-langchain-logo img { width: 30px; height: 30px; }
+  .story-langchain-logo strong { font-size: 21px; }
+  .story-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .story-stages > li { min-height: 255px; }
+  .story-stages > li:nth-child(3) { border-left: 0; border-top: 1px solid #e5e8ea; }
+  .story-stages > li:nth-child(4) { border-top: 1px solid #e5e8ea; }
+  .story-stages > li:nth-child(2)::before { display: none; }
+  .story-outcomes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .story-outcomes > * { border-top: 1px solid #ffffff18; }
+  .story-outcomes > *:nth-child(odd) { border-left: 0; }
+}
+
+@media (max-width: 760px) {
+  .partnership-story { padding: 18px 14px 28px; gap: 18px; }
+  .story-hero { grid-template-columns: 1fr; gap: 22px; }
+  .story-partner-lockup { min-height: 0; justify-content: flex-start; border-top: 3px solid #76b900; border-left: 0; padding: 20px 0 0; }
+  .story-hero h1 { font-size: 34px; line-height: 1.08; }
+  .story-lead { font-size: 15px; }
+  .story-path-heading { align-items: start; flex-direction: column; }
+  .story-path-heading > p { text-align: left; }
+  .story-stages { grid-template-columns: 1fr; }
+  .story-stages > li { min-height: 0; padding: 22px; }
+  .story-stages > li + li { border-top: 1px solid #e5e8ea; border-left: 0; }
+  .story-stages > li::before { display: none; }
+  .story-stage-copy { min-height: 0; }
+  .story-stage-copy h3 { font-size: 20px; }
+  .story-stage-copy p { font-size: 14px; }
+  .technology-name { font-size: 12px; }
+  .story-detail-button { font-size: 13px; }
+  .story-outcomes { grid-template-columns: 1fr; }
+  .story-outcomes > * + * { border-top: 1px solid #ffffff18; border-left: 0; }
+  .technology-dialog-backdrop { padding: 0; }
+  .technology-dialog { width: 100vw; height: 100vh; max-height: none; border: 0; border-radius: 0; }
+  .technology-dialog-scroll { padding: 20px 16px 30px; }
+  .technology-dialog-owner img { width: 48px; }
+  .technology-code > header { align-items: start; }
+  .technology-code > header code { white-space: normal; overflow-wrap: anywhere; }
+  .technology-code pre { max-height: 42vh; font-size: 11px; }
+  .technology-resources { grid-template-columns: 1fr; }
+}

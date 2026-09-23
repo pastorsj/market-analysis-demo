@@ -1,0 +1,16 @@
+.topic-map {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  background:
+    linear-gradient(#e7e7ea 1px, transparent 1px),
+    linear-gradient(90deg, #e7e7ea 1px, transparent 1px),
+    #f7f7f8;
+  background-size: 20px 20px;
+}
+
+.topic-map circle {
+  fill: #76b900;
+  stroke: #ffffff;
+  stroke-width: 1;
+}
