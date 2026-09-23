@@ -300,6 +300,25 @@ function validateClaim(value: unknown): void {
   if ((item.confidence as number) > 1 || list(item.citation_ids, "claim citations").some((entry) => typeof entry !== "string")) throw Error("Invalid claim");
 }
 
+function logicalAttempts(attempts: ModelAttempt[]): ModelAttempt[] {
+  if (new Set(attempts.map((attempt) => attempt.application_call_id)).size !== attempts.length) throw Error("Model answer contains an invalid or duplicate attempt");
+  const requests = new Map<string, number[]>();
+  attempts.forEach((attempt, index) => requests.set(attempt.application_request_id, [...(requests.get(attempt.application_request_id) ?? []), index]));
+  const retried = new Set<number>();
+  for (const indexes of requests.values()) {
+    if (indexes.length === 1) continue;
+    if (indexes.length !== 2 || indexes[1] !== indexes[0] + 1) throw Error("Invalid model transport retry");
+    const first = attempts[indexes[0]], second = attempts[indexes[1]];
+    const sameTarget = first.role === second.role && first.algorithm === second.algorithm && first.destination_class === second.destination_class && first.configured_model === second.configured_model && first.application_request_id === second.application_request_id && first.switchyard_trial_id === second.switchyard_trial_id && first.selected_tier === second.selected_tier;
+    const failedTransport = first.algorithm === "switchyard_escalation" && first.destination_class === "internal_inference" && first.state === "failed" && first.failure_class === "transport_error" && first.model_assertion === null && first.identity_evidence === "unavailable" && first.validation_status === "invalid" && first.tokens.prompt === 0 && first.tokens.completion === 0 && first.tokens.total === 0;
+    const succeeded = second.state === "succeeded" && second.failure_class === null && second.model_assertion === second.configured_model && second.identity_evidence === "direct_provider_verified" && second.validation_status === "valid";
+    const transportFailedAgain = second.state === "failed" && second.failure_class === "transport_error" && second.model_assertion === null && second.identity_evidence === "unavailable" && second.validation_status === "invalid" && second.tokens.prompt === 0 && second.tokens.completion === 0 && second.tokens.total === 0;
+    if (!sameTarget || !failedTransport || !(succeeded || transportFailedAgain) || first.application_call_id === second.application_call_id) throw Error("Invalid model transport retry");
+    retried.add(indexes[0]);
+  }
+  return attempts.filter((_attempt, index) => !retried.has(index));
+}
+
 function validateReport(value: unknown): Report {
   const item = object(value, "report"); exact(item, reportKeys, "report"); if (item.schema_version !== "1.0") throw Error("Invalid report version"); text(item.title, "report title"); text(item.summary, "report summary"); validateScope(item.scope); const reasons = list(item.no_data_reasons, "no-data reasons"), order = ["missing_news", "missing_company_release", "non_trading_day", "non_listed_or_delisted_instrument"] as const; if (reasons.length > order.length || reasons.some((reason) => typeof reason !== "string" || !order.includes(reason as NoDataReason)) || new Set(reasons).size !== reasons.length || reasons.some((reason, index) => order.indexOf(reason as NoDataReason) <= order.indexOf(reasons[index - 1] as NoDataReason))) throw Error("Invalid no-data reasons");
   list(item.claims, "claims").forEach(validateClaim); list(item.citations, "citations").forEach(validateCitation); if (list(item.uncertainty, "uncertainty").some((entry) => typeof entry !== "string")) throw Error("Invalid uncertainty"); list(item.receipts, "receipts").forEach(validateReceipt); const routing = validateRouting(item.routing); member(item.answer_mode, answerModes, "answer mode");
@@ -307,14 +326,14 @@ function validateReport(value: unknown): Report {
   for (const raw of artifacts) { const artifact = object(raw, "artifact"); exact(artifact, ["artifact_id", "kind", "title", "data"], "artifact"); text(artifact.artifact_id, "artifact ID"); member(artifact.kind, ["price_series", "topic_projection", "propagation_graph", "report"] as const, "artifact kind"); text(artifact.title, "artifact title"); object(artifact.data, "artifact data"); }
   text(item.generated_at, "report timestamp");
   if (item.answer_mode === "model_synthesis") {
-    const formatters = attempts.filter((attempt) => attempt.role === "report_formatting"), core = attempts.filter((attempt) => attempt.role !== "report_formatting");
+    const logical = logicalAttempts(attempts), formatters = logical.filter((attempt) => attempt.role === "report_formatting"), core = logical.filter((attempt) => attempt.role !== "report_formatting");
     const formatter = formatters[0] ?? null;
     const formatterTerminal = formatter && (formatter.state === "succeeded" && formatter.validation_status === "valid" || formatter.state === "failed" && formatter.validation_status === "invalid");
-    if (formatters.length > 1 || formatter && (attempts.at(-1) !== formatter || formatter.algorithm !== "direct_frontier" || !formatterTerminal)) throw Error("Invalid report formatting attempt");
+    if (formatters.length > 1 || formatter && (logical.at(-1) !== formatter || formatter.algorithm !== "direct_frontier" || !formatterTerminal)) throw Error("Invalid report formatting attempt");
     const escalation = core.some((attempt) => attempt.algorithm === "switchyard_escalation");
     const finalAttempt = escalation ? [...core].reverse().find((attempt) => attempt.role === "agent_reasoning") : core.at(-1);
     if (!finalAttempt) throw Error("Invalid deep-agent model attempt sequence");
-    if (core.some((attempt) => attempt.state !== "succeeded" || attempt.validation_status !== "valid") || new Set(attempts.map((attempt) => attempt.application_call_id)).size !== attempts.length) throw Error("Model answer contains an invalid or duplicate attempt");
+    if (core.some((attempt) => attempt.state !== "succeeded" || attempt.validation_status !== "valid")) throw Error("Model answer contains an invalid or duplicate attempt");
     if (escalation) {
       if (core.some((attempt) => attempt.algorithm !== "switchyard_escalation") || trials.length || routing.requested_mode !== "switchyard_escalation" || routing.effective_mode !== "switchyard_escalation" || routing.configured_model !== "switchyard/escalation" || routing.returned_model !== finalAttempt.model_assertion || routing.remote_attempted !== core.some((attempt) => attempt.destination_class === "internal_inference") || routing.frontier_latched !== (finalAttempt.selected_tier === "capable") || routing.latency_ms !== finalAttempt.latency_ms) throw Error("Escalation route projection disagrees with model attempts");
     } else {
@@ -565,7 +584,7 @@ export function decodeInvestigation(value: unknown): Investigation {
   for (const event of events) {
     if (event.event_type === "routing") { const attempt = event.payload.attempt as unknown as ModelAttempt; if (turnAttempts.some((item) => item.application_call_id === attempt.application_call_id)) throw Error("Duplicate model attempt in turn"); turnAttempts.push(attempt); turnTrials.push(...event.payload.switchyard_trials as SwitchyardTrialBundle[]); }
     if (event.event_type === "report") { const eventReport = event.payload.report as unknown as Report; if (!same(eventReport.model_attempts, turnAttempts) || !same(eventReport.switchyard_trials, turnTrials)) throw Error("Historical model attempt correlation mismatch"); }
-    if (isTerminalEvent(event)) { validateTurnModelSecurity(turnAttempts, turnTrials, receipts[terminalIndex]); turnAttempts = []; turnTrials = []; terminalIndex++; }
+    if (isTerminalEvent(event)) { logicalAttempts(turnAttempts); validateTurnModelSecurity(turnAttempts, turnTrials, receipts[terminalIndex]); turnAttempts = []; turnTrials = []; terminalIndex++; }
   }
   const decodedReport = item.report === null ? null : validateReport(item.report); text(item.error, "investigation error", true); const failure = parseFailure(item.error as string | null);
   const decodedScope = item.scope as Scope | null, request = item.request as unknown as InvestigationRequest;

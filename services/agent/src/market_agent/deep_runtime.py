@@ -32,19 +32,11 @@ from switchyard.libsy import EscalationClassifierConfig, LlmClassifierConfig, al
 from .config import LOCAL_MODEL, LUNA_MODEL, CAPABLE_MODEL
 from .coverage import CoverageCatalog
 
-# Retain the existing contract-test import surface while implementations live
-# in focused modules. Production orchestration remains in MarketDeepAgent.
-from .deep_analogue import (
-    _analogue_claim_citation_ids,
-    _correct_analogue_contract_prose,
-    _correct_analogue_contract_uncertainty,
-)
 from .deep_answers import (
     AnswerSubmission,
-    ResearchAnswer,
     _submission_tool,
 )
-from .deep_evidence import EvidenceCollector, _agent_evidence_view, _tools
+from .deep_evidence import EvidenceCollector, _tools
 from .deep_middleware import (
     AgentActivityCallback,
     RequireAnswerSubmissionMiddleware,

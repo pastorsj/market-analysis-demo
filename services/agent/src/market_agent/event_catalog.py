@@ -9,28 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from .coverage import CoverageCatalog
-# Preserve the existing event_catalog imports for callers of the artifact models.
 from .event_schema import (
     EventCatalogError as EventCatalogError,
     _need as _need,
-    ExactModel as ExactModel,
-    Binding as Binding,
-    Category as Category,
-    Question as Question,
-    MarketRequirement as MarketRequirement,
-    DocumentRequirement as DocumentRequirement,
-    NewsRequirement as NewsRequirement,
-    DerivedRequirement as DerivedRequirement,
-    SourceRequirements as SourceRequirements,
-    Gap as Gap,
-    LayerQualification as LayerQualification,
-    Qualification as Qualification,
-    Limitation as Limitation,
     Event as Event,
-    ExcludedEvent as ExcludedEvent,
-    Summary as Summary,
     PreparedCatalog as PreparedCatalog,
-    ArtifactRecord as ArtifactRecord,
     ArtifactManifest as ArtifactManifest,
 )
 from .planning import parse_question

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib, json, re; from collections import Counter; from collections.abc import Mapping; from dataclasses import dataclass; from datetime import date, datetime, timezone; from enum import StrEnum; from types import MappingProxyType; from typing import Literal
+import json, re; from collections import Counter; from collections.abc import Mapping; from dataclasses import dataclass; from datetime import date, datetime, timezone; from enum import StrEnum; from types import MappingProxyType; from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -230,25 +230,3 @@ def resolve_comparison_scope(question: str | ParsedQuestion, ticker: str | None,
     if parsed.comparison_requested and primary in members: members = (primary, *(item for item in members if item != primary))
     if not parsed.comparison_requested: members = (primary,) if primary in covered else ()
     return ("needs_scope_resolution", ()) if not members or len(members) > 5 else ("ready", members)
-
-
-def create_evidence_plan(question: str, ticker: str | None = None, as_of: datetime | None = None, *, catalog: CoverageCatalog | None = None, resolved_members: tuple[str, ...] | None = None, intents_override: tuple[Intent, ...] | None = None, tool_names: tuple[ToolName, ...]) -> EvidencePlan:
-    parsed = parse_question(question, catalog); intents = intents_override or parsed.intents; required, optional = tool_names, ()
-    if (required or optional) and (ticker is None or as_of is None): raise ValueError("tool plans require a resolved ticker and as_of")
-    if as_of is not None and as_of.tzinfo is None: raise ValueError("as_of must be timezone-aware")
-    status, members = ("ready", ()) if not required and not optional else resolve_comparison_scope(parsed, ticker, catalog, resolved_members)
-    common = {"ticker": (ticker or "").strip().upper(), "as_of": as_of.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if as_of else ""}
-    extras = {"search_news": {"query": f"{common['ticker']} {common['as_of'][:10]} {parsed.text}"[:500], "top_k": 5}, "find_historical_analogues": {"top_k": 3}, "trace_shock_propagation": {"max_depth": 2}, "project_news_topics": {"dimensions": 2, "max_documents": 99}}
-    def call_members(name: ToolName) -> tuple[str, ...]:
-        if name == "get_price_context": return members
-        if name == "search_news" and len(members) > 1 and parsed.source_fanout: return members
-        return members[:1]
-
-    make = lambda names: tuple(PlannedCall(tool=name, arguments={**common, "ticker": member, **extras.get(name, {})}) for name in names for member in call_members(name)) if status == "ready" else ()
-    required_calls, optional_calls = make(required), make(optional)
-    sufficiency = Sufficiency.POLICY if status != "ready" or not required_calls else Sufficiency.GROUNDED
-    allowed: tuple[Outcome, ...] = ("ok",) if not required_calls else ("ok", "partial", "no_data")
-    deterministic: tuple[Outcome, ...] = ("ok",) if not required_calls else ("no_data",)
-    material = {"intents": intents, "required": [call.model_dump(mode="json") for call in required_calls], "optional": [call.model_dump(mode="json") for call in optional_calls], "sufficiency": sufficiency, "status": status, "members": members}
-    plan_id = "plan-" + hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()[:16]
-    return EvidencePlan(plan_id=plan_id, intents=intents, required_calls=required_calls, optional_calls=optional_calls, sufficiency=sufficiency, allowed_outcomes=allowed, deterministic_answer_outcomes=deterministic, explanation="Explicit comparison scope is required." if status != "ready" else "Code-owned bounded capability plan.", status=status, action="execute" if status == "ready" else "clarify", resolved_members=members)

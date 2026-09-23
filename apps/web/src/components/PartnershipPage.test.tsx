@@ -131,7 +131,8 @@ describe("Built Together partnership story", () => {
     expect(dialog.querySelector("h2")?.textContent).toBe("How Switchyard escalates a model turn");
     expect(dialog.textContent).toContain("Lightning produces a local result");
     expect(dialog.textContent).toContain("Luna judges whether that result is sufficient");
-    expect(dialog.textContent).toContain("If a provider fails, the turn stops");
+    expect(dialog.textContent).toContain("one visible retry to the same approved model");
+    expect(dialog.textContent).toContain("A persistent failure stops the turn");
     expect(dialog.textContent).toContain("answer-layout step can call Ultra directly");
     expect(dialog.querySelector("pre")?.textContent).toContain("SwitchyardRoutingMiddleware(adapter)");
     expect(dialog.querySelector("pre")?.textContent).toContain('"efficient": [LOCAL_MODEL]');

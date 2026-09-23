@@ -71,7 +71,7 @@ describe("human-readable investigation failures", () => {
   it.each([
     ["context_length_exceeded", "This investigation exceeded the model’s context limit"],
     ["invalid_json", "The model returned an unusable tool request"],
-    ["transport_error", "We couldn’t reach the analysis model"],
+    ["transport_error", "The analysis route was interrupted"],
     ["transport_contract", "We couldn’t complete this investigation"],
     ["timeout", "The analysis model took too long to respond"],
     ["provider_error", "The analysis model reported a temporary error"],
@@ -121,7 +121,7 @@ describe("human-readable investigation failures", () => {
       const retry = vi.fn();
       act(() => root.render(<TerminalMessage terminal={terminalTurn("route_failure:transport_error")} onRetry={retry} />));
 
-      expect(container.querySelector("[role=alert]")?.textContent).toContain("We couldn’t reach the analysis model");
+      expect(container.querySelector("[role=alert]")?.textContent).toContain("The analysis route was interrupted");
       expect(container.querySelector(".terminal-technical")?.hasAttribute("open")).toBe(false);
       expect(container.querySelector(".terminal-technical code")?.textContent).toBe("route_failure:transport_error");
       const button = container.querySelector<HTMLButtonElement>(".terminal-retry");

@@ -210,7 +210,7 @@ const DETAILS: Readonly<Record<DetailId, TechnologyDetail>> = {
     owner: "nvidia",
     eyebrow: "NVIDIA model routing",
     title: "How Switchyard escalates a model turn",
-    description: "For each Deep Agent model turn, Lightning produces a local result. Luna judges whether that result is sufficient. Switchyard returns the local result or calls Ultra when Luna confirms escalation. If a provider fails, the turn stops instead of silently choosing another model.",
+    description: "For each Deep Agent model turn, Lightning produces a local result. Luna judges whether that result is sufficient. Switchyard returns the local result or calls Ultra when Luna confirms escalation. A brief remote connection interruption gets one visible retry to the same approved model. A persistent failure stops the turn instead of silently choosing another model.",
     source: "services/agent/src/market_agent/deep_runtime.py:147, 273",
     sourceNote: "Abridged from the production source. Focused routing-boundary and model-contract checks are included in tests/agent. Model constants resolve to the approved runtime IDs shown below.",
     code: ROUTING_CODE,

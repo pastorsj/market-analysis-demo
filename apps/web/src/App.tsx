@@ -96,9 +96,9 @@ const routeFailureCopy: Readonly<Record<string, Omit<TerminalPresentation, "tech
     advice: "Try again once. If it repeats, ask the demo operator to inspect the saved model-response validation error.",
   },
   transport_error: {
-    title: "We couldn’t reach the analysis model",
-    explanation: "The connection to the model service failed before it returned an answer. Your question is still saved.",
-    advice: "Try again. If it happens again, wait for the system status to show Ready or ask the demo operator to check the model service.",
+    title: "The analysis route was interrupted",
+    explanation: "A network connection used by model routing ended before the model returned an answer. Your question is still saved, and no partial answer was shown.",
+    advice: "Try again. Eligible brief interruptions to a remote route are retried once automatically. If this message returns, ask the demo operator to check both the local model and remote inference connections.",
   },
   transport_contract: {
     title: "We couldn’t complete this investigation",

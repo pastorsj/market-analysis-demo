@@ -150,6 +150,29 @@ const escalationReport = (): Report => {
   };
 };
 
+const escalationReportWithTransportRetry = () => {
+  const report = escalationReport(), success = escalationAttempt("capable", 3);
+  const failed: ModelAttempt = {
+    ...success,
+    model_assertion: null,
+    identity_evidence: "unavailable",
+    state: "failed",
+    failure_class: "transport_error",
+    application_call_id: "call-escalation-3-first",
+    latency_ms: 5,
+    tokens: { prompt: 0, completion: 0, total: 0 },
+    validation_status: "invalid",
+  };
+  report.model_attempts.push(failed, success);
+  Object.assign(report.routing, {
+    returned_model: success.model_assertion,
+    remote_attempted: true,
+    [inertProjectionKey]: true,
+    latency_ms: success.latency_ms,
+  });
+  return { report, failed, success };
+};
+
 const action = (): SecurityReceipt["external_actions"][number] => ({
   schema_version: "security-observation-v1", observation_id: "action-00000001", action_class: "none",
   request_state: "not_requested", decision: "allowed", attempt: "not_attempted", outcome: "succeeded", limitation: null,
@@ -311,6 +334,44 @@ describe("corrected investigation contract", () => {
     expect(decoded.report?.routing.configured_model).toBe("switchyard/escalation");
   });
 
+  it("accepts one adjacent same-target remote transport retry for a logical request", () => {
+    const { report, failed, success } = escalationReportWithTransportRetry();
+    const decoded = decodeInvestigation(terminalRecord(report, securityForReport(report)));
+
+    expect(decoded.report?.model_attempts.slice(-2).map((attempt) => attempt.application_call_id)).toEqual([
+      failed.application_call_id,
+      success.application_call_id,
+    ]);
+    expect(decoded.report?.model_attempts.slice(-2).map((attempt) => attempt.application_request_id)).toEqual([
+      success.application_request_id,
+      success.application_request_id,
+    ]);
+  });
+
+  it.each(["wrong_failure", "nonzero_tokens", "wrong_target", "different_request", "same_call", "nonadjacent", "third_attempt", "second_failure", "local_retry", "direct_retry"])("rejects invalid model transport retry shape: %s", (caseName) => {
+    const { report, failed, success } = escalationReportWithTransportRetry();
+    if (caseName === "wrong_failure") failed.failure_class = "timeout";
+    if (caseName === "nonzero_tokens") failed.tokens = { prompt: 1, completion: 0, total: 1 };
+    if (caseName === "wrong_target") success.role = "routing_judge";
+    if (caseName === "different_request") success.application_request_id = "request-escalation-other";
+    if (caseName === "same_call") failed.application_call_id = success.application_call_id;
+    if (caseName === "nonadjacent") report.model_attempts.splice(-1, 0, escalationAttempt("judge", 4));
+    if (caseName === "third_attempt") report.model_attempts.push({ ...success, application_call_id: "call-escalation-third" });
+    if (caseName === "second_failure") Object.assign(success, { model_assertion: null, identity_evidence: "unavailable", state: "failed", failure_class: "transport_error", tokens: { prompt: 0, completion: 0, total: 0 }, validation_status: "invalid" });
+    if (caseName === "local_retry") {
+      const local = escalationAttempt("efficient", 5), localFailure: ModelAttempt = { ...local, model_assertion: null, identity_evidence: "unavailable", state: "failed", failure_class: "transport_error", application_call_id: "call-local-first", tokens: { prompt: 0, completion: 0, total: 0 }, validation_status: "invalid" };
+      local.application_request_id = localFailure.application_request_id;
+      report.model_attempts.splice(-2, 2, localFailure, local);
+    }
+    if (caseName === "direct_retry") {
+      const direct: ModelAttempt = { ...success, role: "answer_synthesis", algorithm: "direct_frontier", selected_tier: null };
+      const directFailure: ModelAttempt = { ...failed, role: "answer_synthesis", algorithm: "direct_frontier", selected_tier: null };
+      report.model_attempts.splice(-2, 2, directFailure, direct);
+    }
+
+    expect(() => decodeInvestigation(terminalRecord(report, securityForReport(report)))).toThrow(/transport retry|duplicate attempt|model answer|security receipt/i);
+  });
+
   it.each([false, true])("accepts a terminal cosmetic formatter attempt (failed=%s) without changing routing", (failed) => {
     const report = escalationReport(), before = { ...report.routing };
     report.model_attempts = [...report.model_attempts, formatterAttempt(failed)];
@@ -426,6 +487,31 @@ describe("corrected investigation contract", () => {
     expect(decoded.status).toBe("failed");
     expect((decoded.events[1].payload.attempt as ModelAttempt).state).toBe("failed");
     expect(parseFailure(decoded.error)).toEqual({ stage: "route_failure", code: "transport_contract" });
+  });
+
+  it("accepts and renders a typed terminal after both sanctioned transport attempts fail", () => {
+    const { failed, success } = escalationReportWithTransportRetry();
+    const retryFailed: ModelAttempt = {
+      ...failed,
+      application_call_id: success.application_call_id,
+      latency_ms: 8,
+    };
+    const receipt: SecurityReceipt = {
+      ...verifiedSecurity(),
+      network_egress: [networkForAttempt(failed), networkForAttempt(retryFailed)] as SecurityReceipt["network_egress"],
+    };
+    const record = typedFailureRecord("route_failure:transport_error", receipt);
+    record.events.splice(1, 0,
+      event(2, "routing", { attempt: failed, switchyard_trials: [] }),
+      event(3, "routing", { attempt: retryFailed, switchyard_trials: [] }),
+    );
+    record.events[3].sequence = 4;
+
+    const decoded = decodeInvestigation(record), html = renderToStaticMarkup(createElement(ConversationHistory, { record: decoded, active: false }));
+    expect(decoded.status).toBe("failed");
+    expect(parseFailure(decoded.error)).toEqual({ stage: "route_failure", code: "transport_error" });
+    expect(html).toContain('data-terminal-outcome="route_failure"');
+    expect(html).toContain("route_failure:transport_error");
   });
 
   it("renders a synthesis validation failure after successful model transport", () => {

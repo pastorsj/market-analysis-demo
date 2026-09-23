@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json, re
 
-from .evidence import EvidenceRun; from .planning import EvidencePlan; from .schemas import FinalReport, legacy_routing_projection; from .synthesis import accepted_evidence, evidence_reference_tickers
+from .evidence import EvidenceRun; from .planning import EvidencePlan; from .schemas import FinalReport, ModelAttempt, legacy_routing_projection; from .synthesis import accepted_evidence, evidence_reference_tickers
 
 
 class VerificationError(ValueError):
@@ -17,17 +17,37 @@ def _fail(code: str) -> None: raise VerificationError(code)
 def _absence_sentence(value: str) -> str: value = re.sub(r"^[\s>*_`-]+|[\s.!?*_`]+$", "", value.lower()); return re.sub(r"\s+", " ", re.sub(r"\b(?:benchmark|comparison|data|evidence|for|is|was|were)\b", "", value)).strip()
 
 
+def _logical_attempts(attempts: tuple[ModelAttempt, ...]) -> tuple[ModelAttempt, ...]:
+    """Collapse the one sanctioned retry shape while rejecting ambiguous history."""
+    if len({item.application_call_id for item in attempts}) != len(attempts): _fail("answer_mode_integrity")
+    requests: dict[str, list[int]] = {}
+    for index, item in enumerate(attempts): requests.setdefault(item.application_request_id, []).append(index)
+    retried: set[int] = set()
+    target_fields = ("role", "algorithm", "destination_class", "configured_model", "application_request_id", "switchyard_trial_id", "selected_tier")
+    for indexes in requests.values():
+        if len(indexes) == 1: continue
+        if len(indexes) != 2 or indexes[1] != indexes[0] + 1: _fail("answer_mode_integrity")
+        first, second = attempts[indexes[0]], attempts[indexes[1]]
+        same_target = all(getattr(first, field) == getattr(second, field) for field in target_fields)
+        zero_tokens = first.tokens.prompt == first.tokens.completion == first.tokens.total == 0
+        failed_transport = first.algorithm == "switchyard_escalation" and first.destination_class == "internal_inference" and first.state == "failed" and first.failure_class == "transport_error" and first.model_assertion is None and first.identity_evidence == "unavailable" and first.validation_status == "invalid" and zero_tokens
+        succeeded = second.state == "succeeded" and second.failure_class is None and second.model_assertion == second.configured_model and second.identity_evidence == "direct_provider_verified" and second.validation_status == "valid"
+        if not (same_target and failed_transport and succeeded and first.application_call_id != second.application_call_id): _fail("answer_mode_integrity")
+        retried.add(indexes[0])
+    return tuple(item for index, item in enumerate(attempts) if index not in retried)
+
+
 def _mode(report: FinalReport) -> None:
     route = report.routing; inert = route.configured_model == "deterministic" and route.returned_model is None and not route.remote_attempted and route.requested_mode == route.effective_mode
     if report.answer_mode not in {"deterministic_policy", "deterministic_evidence", "model_synthesis"} or route.fallback_used: _fail("answer_mode_integrity")
     if report.answer_mode == "deterministic_policy" and (not inert or any((report.claims, report.citations, report.receipts, report.artifacts, report.model_attempts, report.switchyard_trials))): _fail("answer_mode_integrity")
     if report.answer_mode == "deterministic_evidence" and (not inert or report.model_attempts or report.switchyard_trials): _fail("answer_mode_integrity")
     if report.answer_mode == "model_synthesis":
-        attempts = report.model_attempts; attempt = next((item for item in reversed(attempts) if item.role in {"agent_reasoning", "answer_synthesis"}), None) if attempts else _fail("answer_mode_integrity"); trials = {item.trial_id: item for item in report.switchyard_trials}
-        formatters = [item for item in attempts if item.role == "report_formatting"]
-        core = [item for item in attempts if item.role != "report_formatting"]
+        attempts = report.model_attempts; logical = _logical_attempts(attempts); attempt = next((item for item in reversed(logical) if item.role in {"agent_reasoning", "answer_synthesis"}), None) if logical else _fail("answer_mode_integrity"); trials = {item.trial_id: item for item in report.switchyard_trials}
+        formatters = [item for item in logical if item.role == "report_formatting"]
+        core = [item for item in logical if item.role != "report_formatting"]
         routed = [item.switchyard_trial_id for item in core if item.switchyard_trial_id is not None]
-        formatter_valid = not formatters or len(formatters) == 1 and formatters[0] is attempts[-1] and formatters[0].algorithm == "direct_frontier" and ((formatters[0].state == "succeeded" and formatters[0].validation_status == "valid") or (formatters[0].state == "failed" and formatters[0].validation_status == "invalid"))
+        formatter_valid = not formatters or len(formatters) == 1 and formatters[0] is logical[-1] and formatters[0].algorithm == "direct_frontier" and ((formatters[0].state == "succeeded" and formatters[0].validation_status == "valid") or (formatters[0].state == "failed" and formatters[0].validation_status == "invalid"))
         if attempt is None or not formatter_valid or any(item.state != "succeeded" or item.validation_status != "valid" or item.switchyard_trial_id is not None and item.switchyard_trial_id not in trials for item in core) or set(routed) != set(trials): _fail("answer_mode_integrity")
         expected = legacy_routing_projection(attempt, report.routing.requested_mode).model_copy(update={"remote_attempted": any(item.destination_class == "internal_inference" for item in core)})
         if report.routing != expected: _fail("answer_mode_integrity")

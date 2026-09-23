@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.exceptions import ContextOverflowError
 from langchain_core.messages import HumanMessage
 from langchain_nvidia_switchyard import SwitchyardRoutingMiddleware
 from nemo_relay.integrations.deepagents import NemoRelayDeepAgentsMiddleware
@@ -20,9 +19,13 @@ from .generation_health import generation_health
 from .deep_answers import submission_validation_error
 from .deep_evidence import EvidenceCollector
 from .deep_submission import EvidenceSubmissionRepair, current_skill_loaded, typed_submission_correction, valid_skill_call
+from .routing_errors import retryable_remote_connection_error
+from .routing_errors import route_failure_class as _route_failure_class
 from .schemas import ModelAttempt, TokenCounts
 from .security import SecurityRecorder
 from .switchyard_adapter import RelayHeaderCompatibilityMiddleware
+
+_REMOTE_CONNECTION_RETRY_DELAY_SECONDS = 0.25
 
 
 def _tokens(body: Mapping[str, object]) -> TokenCounts:
@@ -34,55 +37,6 @@ def _tokens(body: Mapping[str, object]) -> TokenCounts:
         completion=completion,
         total=max(prompt + completion, int(usage.get("total_tokens", 0) or 0)),
     )
-
-
-def _route_failure_class(exc: Exception) -> str:
-    """Map the provider's observable failure into the stable public taxonomy."""
-
-    primary_detail = str(exc).lower()
-    details: list[str] = []
-    current: BaseException | None = exc
-    seen: set[int] = set()
-    context_overflow = False
-    invalid_tool_json = False
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        context_overflow |= isinstance(current, ContextOverflowError)
-        invalid_tool_json |= isinstance(current, ValueError) and "response.invalid_tool_calls" in str(current)
-        if getattr(current, "status_code", None) in {400, 413, 422}:
-            context_overflow |= any(marker in str(current).lower() for marker in (
-                "maximum context length", "context_length_exceeded", "context window exceeded",
-            ))
-        details.extend((type(current).__name__, str(current), repr(current)))
-        current = current.__cause__ or current.__context__
-    detail = " ".join(details).lower()
-    if primary_detail == "identity_mismatch":
-        return "identity_mismatch"
-    if context_overflow or (
-        "openaiinvalidrequesterror" in detail and "error code: 400" in detail
-        and any(marker in detail for marker in ("maximum context length", "context_length_exceeded"))
-    ):
-        return "context_length_exceeded"
-    if invalid_tool_json:
-        return "invalid_json"
-    if "timeout" in type(exc).__name__.lower():
-        return "timeout"
-    if (
-        "unable to complete request: max_output_tokens" in detail
-        and "received model group=" in detail
-    ):
-        return "provider_error"
-    # The internal OpenAI-compatible gateway uses this 404 when an advertised
-    # model group has no currently available provider target. The request did
-    # reach the gateway, so presenting it as a generic transport/contact error
-    # sends the visitor and operator in the wrong direction.
-    if (
-        "openaimodelnotfounderror" in detail
-        and "received model group=" in detail
-        and "404" in detail
-    ):
-        return "route_unavailable"
-    return "transport_error"
 
 
 class RoutedCallObserver:
@@ -102,115 +56,106 @@ class RoutedCallObserver:
         invoke: Callable[[], Awaitable[Mapping[str, object]]],
     ) -> Mapping[str, object]:
         self.failure = None
-        if self.counter >= 48:
-            self.failure = "agent_turn_limit"
-            raise RuntimeError("physical model-call limit reached")
-        self.counter += 1
-        key = f"model-{self.counter}"
-        call_id = f"call-{uuid4().hex}"
         request_id = f"request-{uuid4().hex}"
         boundary, destination = (
             ("local_model", "local_model")
             if model_id == LOCAL_MODEL
             else ("frontier_model", "internal_inference")
         )
-        started = perf_counter()
         display = "Routing judge" if tier == "judge" else "Agent reasoning"
-        await self.progress(
-            key=key,
-            kind="model",
-            display_name=display,
-            state="started",
-            route_mode="switchyard_escalation",
-            configured_model=model_id,
-            selected_tier=tier,
-        )
-        observation = self.recorder.expect_network(boundary, destination)
-        try:
-            body = await invoke()
-            assertion = (
-                body.get("model") if isinstance(body.get("model"), str) else None
-            )
-            if assertion != model_id:
-                raise RuntimeError("identity_mismatch")
-        except asyncio.CancelledError:
-            self.recorder.finish_network(
-                observation,
-                attempt="attempted",
-                outcome="failed",
-                call_id=call_id,
-                application_request_id=request_id,
-            )
-            raise
-        except Exception as exc:
-            failure = _route_failure_class(exc)
-            generation_health.observe_failure(model_id, failure)
-            self.failure = failure
+        role = "routing_judge" if tier == "judge" else "agent_reasoning"
+
+        async def record(
+            *, body: Mapping[str, object] | None = None, failure: str | None = None
+        ) -> None:
+            succeeded = failure is None
+            identity = "direct_provider_verified" if succeeded else "unavailable"
             attempt = ModelAttempt(
-                role="routing_judge" if tier == "judge" else "routing_candidate",
+                role=role,
                 algorithm="switchyard_escalation",
                 destination_class=destination,
                 configured_model=model_id,
-                identity_evidence="unavailable",
-                state="failed",
+                model_assertion=model_id if succeeded else None,
+                identity_evidence=identity,
+                state="succeeded" if succeeded else "failed",
                 failure_class=failure,
                 application_call_id=call_id,
                 application_request_id=request_id,
                 latency_ms=max(0.0, (perf_counter() - started) * 1000),
-                validation_status="invalid",
+                tokens=_tokens(body or {}) if succeeded else TokenCounts(),
+                validation_status="valid" if succeeded else "invalid",
                 selected_tier=tier,
             )
+            self.failure = failure
             self.attempts.append(attempt)
             self.recorder.finish_network(
                 observation,
                 attempt="attempted",
-                outcome="failed",
+                outcome=attempt.state,
                 call_id=call_id,
                 application_request_id=request_id,
+                identity_evidence=identity if succeeded else None,
             )
             await self.progress(
                 key=key,
                 kind="model",
                 display_name=display,
-                state="failed",
+                state="completed" if succeeded else "failed",
                 route_mode="switchyard_escalation",
                 **_attempt_progress(attempt),
             )
-            raise
-        attempt = ModelAttempt(
-            role="routing_judge" if tier == "judge" else "agent_reasoning",
-            algorithm="switchyard_escalation",
-            destination_class=destination,
-            configured_model=model_id,
-            model_assertion=model_id,
-            identity_evidence="direct_provider_verified",
-            state="succeeded",
-            application_call_id=call_id,
-            application_request_id=request_id,
-            latency_ms=max(0.0, (perf_counter() - started) * 1000),
-            tokens=_tokens(body),
-            validation_status="valid",
-            selected_tier=tier,
-        )
-        self.failure = None
-        self.attempts.append(attempt)
-        self.recorder.finish_network(
-            observation,
-            attempt="attempted",
-            outcome="succeeded",
-            call_id=call_id,
-            application_request_id=request_id,
-            identity_evidence="direct_provider_verified",
-        )
-        await self.progress(
-            key=key,
-            kind="model",
-            display_name=display,
-            state="completed",
-            route_mode="switchyard_escalation",
-            **_attempt_progress(attempt),
-        )
-        return body
+
+        for retry_index in range(2):
+            if self.counter >= 48:
+                self.failure = "agent_turn_limit"
+                raise RuntimeError("physical model-call limit reached")
+            self.counter += 1
+            key = f"model-{self.counter}"
+            call_id = f"call-{uuid4().hex}"
+            started = perf_counter()
+            await self.progress(
+                key=key,
+                kind="model",
+                display_name=display,
+                state="started",
+                route_mode="switchyard_escalation",
+                configured_model=model_id,
+                selected_tier=tier,
+            )
+            observation = self.recorder.expect_network(boundary, destination)
+            try:
+                body = await invoke()
+                assertion = (
+                    body.get("model") if isinstance(body.get("model"), str) else None
+                )
+                if assertion != model_id:
+                    raise RuntimeError("identity_mismatch")
+            except asyncio.CancelledError:
+                self.recorder.finish_network(
+                    observation,
+                    attempt="attempted",
+                    outcome="failed",
+                    call_id=call_id,
+                    application_request_id=request_id,
+                )
+                raise
+            except Exception as exc:
+                failure = _route_failure_class(exc)
+                generation_health.observe_failure(model_id, failure)
+                await record(failure=failure)
+                retry = (
+                    retry_index == 0
+                    and self.counter < 48
+                    and model_id != LOCAL_MODEL
+                    and retryable_remote_connection_error(exc)
+                )
+                if retry:
+                    await asyncio.sleep(_REMOTE_CONNECTION_RETRY_DELAY_SECONDS)
+                    continue
+                raise
+            await record(body=body)
+            return body
+        raise AssertionError("unreachable routed-call retry state")
 
 
 class AgentActivityCallback(AsyncCallbackHandler):
