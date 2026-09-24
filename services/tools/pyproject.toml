@@ -5,6 +5,6 @@ build-backend = "setuptools.build_meta"
 name = "market-tools"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi==0.141.1", "uvicorn==0.52.4", "pydantic-settings==2.7.1", "mcp==2.2.0"]
+dependencies = ["mcp==2.2.0", "uvicorn==0.52.4"]  # GPU libraries come from base.Dockerfile
 [tool.setuptools.packages.find]
 where = ["src"]

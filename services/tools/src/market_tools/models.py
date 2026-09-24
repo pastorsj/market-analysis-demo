@@ -24,7 +24,7 @@ class Citation(StrictModel):
     citation_id: str = Field(pattern=r"^cit-[a-f0-9]{12,64}$")
     evidence_id: str
     title: str = Field(min_length=1, max_length=500)
-    url: AnyHttpUrl
+    url: AnyHttpUrl | None = None  # computed results have no external source
     source_type: Literal["market", "news", "filing", "release", "relationship", "model"]
     published_at: datetime
     available_at: datetime
@@ -34,28 +34,16 @@ class Citation(StrictModel):
 
 
 class ExecutionReceipt(StrictModel):
-    engine: Literal["cudf", "cuvs", "cugraph", "xgboost-gpu", "cuml", "deterministic"]
+    engine: Literal["cudf", "cuvs", "cugraph", "xgboost-gpu", "cuml"]
     device: str
-    gpu_executed: bool
-    fallback_used: Literal[False] = False
+    gpu_executed: Literal[True] = True
     duration_ms: Annotated[float, Field(ge=0)]
-    artifact_manifest_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
-    scenario_id: str | None = None
-    market_manifest_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-    document_manifest_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-    market_readiness_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-    document_readiness_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-
-    @model_validator(mode="after")
-    def execution_is_truthful(self) -> ExecutionReceipt:
-        if self.gpu_executed != (self.engine != "deterministic"):
-            raise ValueError("engine and gpu_executed disagree")
-        return self
+    scenario_id: str
 
 
 class Artifact(StrictModel):
     artifact_id: str
-    kind: Literal["price_series", "topic_projection", "propagation_graph", "report"]
+    kind: Literal["analogue_table", "comovement_graph", "topic_projection"]
     title: str = Field(min_length=1, max_length=500)
     data: dict[str, object] = Field(default_factory=dict)
 
@@ -66,7 +54,7 @@ class CoverageItem(StrictModel):
         "market_window",
         "documents",
         "analogue_candidates",
-        "graph_paths",
+        "comovement",
         "risk_model",
         "projection_documents",
     ]
@@ -100,7 +88,7 @@ class ToolResult(StrictModel):
         "get_price_context",
         "search_news",
         "find_historical_analogues",
-        "trace_shock_propagation",
+        "map_comovement",
         "predict_volatility_risk",
         "project_news_topics",
     ]
@@ -110,7 +98,7 @@ class ToolResult(StrictModel):
     limitations: Annotated[list[ToolLimitation], Field(max_length=20)] = Field(default_factory=list)
     evidence: Annotated[list[EvidenceItem], Field(max_length=100)]
     citations: Annotated[list[Citation], Field(max_length=100)]
-    receipt: ExecutionReceipt
+    receipt: ExecutionReceipt | None = None  # None when no computation ran
     data: dict[str, object]
     artifacts: Annotated[list[Artifact], Field(max_length=10)] = Field(default_factory=list)
     warnings: Annotated[list[str], Field(max_length=20)] = Field(default_factory=list)

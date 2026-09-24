@@ -1,3 +1,4 @@
+# The GPU base image is built from base.Dockerfile.
 ARG TOOLS_FOUNDATION_IMAGE=market-shock/tools-foundation:phase0
 FROM ${TOOLS_FOUNDATION_IMAGE}
 ARG MARKET_SHOCK_BUILD_INPUT_SHA256=unverified
