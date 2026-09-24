@@ -151,3 +151,23 @@ async def test_status_lists_companies_and_models(client, monkeypatch):
     assert body["ready"] is True
     assert body["companies"][0] == {"symbol": "NVDA", "name": "NVIDIA"}
     assert "test-remote-key" not in json.dumps(body)
+
+
+async def test_turns_interrupted_by_a_restart_become_failed(client):
+    from market_agent.runner import fail_interrupted, new_investigation
+    from market_agent.schemas import Scope, Turn
+
+    store = app_module.app.state.store
+    stuck = new_investigation(Scope(status="needs_input"))
+    stuck.turns.append(Turn(number=1, question="hi", status="running", started_at=stuck.created_at))
+    store.save(stuck)
+    fail_interrupted(store)
+    body = (await client.get(f"/api/investigations/{stuck.investigation_id}")).json()
+    assert body["status"] == "failed" and body["turns"][0]["error"]["code"] == "interrupted"
+
+
+@pytest.mark.parametrize(
+    "query", ["ticker=ZZZZ&as_of=2025-01-27", "ticker=NVDA&as_of=1999-01-01", "ticker=NVDA&as_of=bad"]
+)
+async def test_dashboard_rejects_bad_input_without_calling_tools(client, query):
+    assert (await client.get(f"/api/dashboard?{query}")).status_code == 422

@@ -12,6 +12,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from langchain.agents.middleware.model_call_limit import ModelCallLimitExceededError
+from langgraph.errors import GraphRecursionError
+
 from .agent import AgentError, MarketAgent
 from .catalog import Coverage
 from .context import TurnContext
@@ -39,18 +42,22 @@ class Runner:
         self.changed = asyncio.Condition()
         self.sequence: dict[UUID, int] = {}
         self.starts: dict[tuple[UUID, str], datetime] = {}
+        self.version = 0
+        self.attempt = 0
 
     # Streams --------------------------------------------------------------
 
-    async def wait_for_change(self, timeout: float = 15) -> None:
+    async def wait_for_change(self, seen: int, timeout: float = 15) -> None:
+        """Wait until something changes after version ``seen`` (or the timeout passes)."""
         async with self.changed:
             try:
-                await asyncio.wait_for(self.changed.wait(), timeout)
+                await asyncio.wait_for(self.changed.wait_for(lambda: self.version != seen), timeout)
             except TimeoutError:
                 pass
 
     async def _notify(self) -> None:
         async with self.changed:
+            self.version += 1
             self.changed.notify_all()
 
     # Turns ----------------------------------------------------------------
@@ -84,6 +91,7 @@ class Runner:
         investigation.status, investigation.updated_at = "running", now()
         self.store.save(investigation)
         self.running_id = investigation.investigation_id
+        self.attempt += 1
         self.task = asyncio.create_task(self._run(investigation, retry=retry))
 
     async def cancel(self, investigation_id: UUID) -> bool:
@@ -130,9 +138,13 @@ class Runner:
             }
         except (AgentError, RouteError) as exc:
             update = {"status": "failed", "error": TurnError(code=exc.code, message=str(exc))}
+        except (ModelCallLimitExceededError, GraphRecursionError):
+            message = "The agent used its step budget without finishing. Try a narrower question."
+            update = {"status": "failed", "error": TurnError(code="step_limit", message=message)}
         except Exception as exc:
             log.exception("turn failed")
-            update = {"status": "failed", "error": TurnError(code="agent_error", message=type(exc).__name__)}
+            message = f"{type(exc).__name__}: {exc}"[:300]
+            update = {"status": "failed", "error": TurnError(code="agent_error", message=message)}
         finally:
             ended = now()
             final = investigation.turns[-1].model_copy(
@@ -141,10 +153,23 @@ class Runner:
             investigation.turns[-1] = final
             investigation.status, investigation.updated_at = final.status, ended
             state = {"completed": "succeeded", "failed": "failed", "cancelled": "cancelled"}[final.status]
-            await context.progress(span="turn", kind="turn", name=f"Turn {turn.number}", state=state)
-            self.store.save(investigation)
-            self.running_id = None
-            await self._notify()
+            try:
+                await context.progress(span="turn", kind="turn", name=f"Turn {turn.number}", state=state)
+                self.store.save(investigation)
+            except Exception:
+                log.exception("could not store the finished turn")
+                investigation.turns[-1] = final.model_copy(
+                    update={
+                        "status": "failed",
+                        "report": None,
+                        "error": TurnError(code="store_error", message="The result could not be stored."),
+                    }
+                )
+                investigation.status = "failed"
+                self.store.save(investigation)
+            finally:
+                self.running_id = None
+                await self._notify()
 
     async def _progress(
         self,
@@ -164,7 +189,7 @@ class Runner:
         sequence += 1
         self.sequence[investigation_id] = sequence
         at = now()
-        span_id = f"t{turn}-{span}"
+        span_id = f"t{turn}.{self.attempt}-{span}"
         started = at if state == "running" else self.starts.pop((investigation_id, span_id), at)
         if state == "running":
             self.starts[(investigation_id, span_id)] = at
@@ -174,7 +199,7 @@ class Runner:
             at=at,
             span=Span(
                 span_id=span_id,
-                parent_id=None if kind == "turn" else f"t{turn}-turn",
+                parent_id=None if kind == "turn" else f"t{turn}.{self.attempt}-turn",
                 kind=kind,
                 name=name,
                 state=state,
@@ -185,6 +210,20 @@ class Runner:
         )
         self.store.append(investigation_id, event)
         await self._notify()
+
+
+def fail_interrupted(store: Store) -> None:
+    """Turns still marked running when the service starts were interrupted by a restart."""
+    for investigation in store.running():
+        investigation.turns[-1] = investigation.turns[-1].model_copy(
+            update={
+                "status": "failed",
+                "ended_at": now(),
+                "error": TurnError(code="interrupted", message="The agent restarted while this was running."),
+            }
+        )
+        investigation.status = "failed"
+        store.save(investigation)
 
 
 def new_investigation(scope: Scope) -> Investigation:

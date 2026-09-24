@@ -135,3 +135,10 @@ async def test_repeated_calls_are_served_from_the_turn_cache(coverage, fake_tool
     await tools_module.call_tool(context, "detect_market_shock", "NVDA")
     await tools_module.call_tool(context, "detect_market_shock", "nvda")
     assert len(fake_tools) == 1
+
+
+async def test_reworded_repeat_calls_are_capped_per_tool_and_ticker(coverage, fake_tools):
+    context, _ = turn(coverage)
+    for query in ("chips", "chip demand", "chip stocks", "chip news"):
+        result = await tools_module.call_tool(context, "search_news", "NVDA", query=query)
+    assert result["outcome"] == "blocked" and len(fake_tools) == 3

@@ -113,6 +113,12 @@ class Store:
             row = self.db.execute("SELECT payload FROM investigations_v2 WHERE id=?", (key,)).fetchone()
         return None if row is None else Investigation.model_validate_json(self._open(key, row[0]))
 
+    def running(self) -> list[Investigation]:
+        with self.lock:
+            rows = self.db.execute("SELECT id, payload FROM investigations_v2").fetchall()
+        records = (Investigation.model_validate_json(self._open(key, blob)) for key, blob in rows)
+        return [item for item in records if item.status == "running"]
+
     def events(self, investigation_id: UUID, after: int = 0) -> list[Event]:
         key = str(investigation_id)
         with self.lock:

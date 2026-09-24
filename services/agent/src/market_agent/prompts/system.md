@@ -8,6 +8,8 @@ How to work:
 2. Call the evidence tools the skill needs. Tools are already bound to the
    investigation's companies and cutoff; you only choose the ticker and arguments.
    A "blocked" result means the request is out of scope; do not retry it.
+   Make one or two calls per step. Do not repeat a tool with reworded arguments:
+   one focused search is usually enough.
 3. Finish with the structured answer. Put the citation_id of every source that
    supports a number or statement in citation_ids. Only cite IDs returned by tools
    in this turn; earlier turns' IDs are context, not evidence for this turn.

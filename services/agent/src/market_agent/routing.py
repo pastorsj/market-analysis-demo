@@ -195,7 +195,10 @@ class EscalationAdapter:
         self, request: Mapping[str, object]
     ) -> tuple[list[Mapping[str, object]], Mapping[str, object]]:
         turn = current_turn.get()
-        headers = {"x-switchyard-session-id": turn.investigation_id if turn else "unscoped"}
+        session = (
+            f"{turn.investigation_id}:{turn.turn}" if turn else "unscoped"
+        )  # escalation stays within a turn
+        headers = {"x-switchyard-session-id": session}
         decisions: list[Mapping[str, object]] = []
         models = {**TIERS, "any": [LOCAL_MODEL, CAPABLE_MODEL, JUDGE_MODEL]}
         async for step in self.algorithm.run_stream(request, models, headers=headers):

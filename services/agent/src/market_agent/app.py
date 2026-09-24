@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import date
 import logging
 from contextlib import asynccontextmanager
 from time import monotonic
@@ -28,7 +29,7 @@ from .config import (
     Settings,
 )
 from .relay_tracing import RelayTracing
-from .runner import Busy, Runner, new_investigation
+from .runner import Busy, Runner, fail_interrupted, new_investigation
 from .schemas import CreateInvestigation, FollowUp, Investigation
 from .scope import ScopeError, follow_up, resolve
 from .store import Store, load_key, open_checkpointer
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI):
         events = None
     key = load_key(settings.state_root / "agent.key")
     store = Store(settings.state_root / "agent-v2.sqlite3", key, settings.secrets)
+    fail_interrupted(store)
     checkpointer, connection = await open_checkpointer(settings.state_root / "checkpoints-v2.sqlite3", key)
     tracing = RelayTracing()
     await tracing.start()
@@ -153,9 +155,14 @@ async def shock_events(request: Request):
 
 
 @app.get("/api/dashboard")
-async def dashboard(ticker: str, as_of: str):
+async def dashboard(ticker: str, as_of: date, request: Request):
+    coverage = request.app.state.coverage
+    if ticker not in coverage.targets:
+        raise HTTPException(422, f"Choose one of {', '.join(coverage.targets)}.")
+    if not coverage.first_session <= as_of <= coverage.last_session:
+        raise HTTPException(422, f"Choose a date from {coverage.first_session} to {coverage.last_session}.")
     async with Client(TOOLS_URL, read_timeout_seconds=60) as client:
-        result = await client.read_resource(f"market://dashboard/{ticker}/{as_of}")
+        result = await client.read_resource(f"market://dashboard/{ticker}/{as_of.isoformat()}")
     contents = list(result.contents)
     text = getattr(contents[0], "text", None) if contents else None
     if not isinstance(text, str):
@@ -241,6 +248,7 @@ async def stream(investigation_id: UUID, request: Request, last_event_id: str | 
     async def events():
         after = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
         while True:
+            seen = runner.version
             for event in store.events(investigation_id, after):
                 after = event.sequence
                 yield f"id: {after}\nevent: progress\ndata: {event.model_dump_json()}\n\n"
@@ -251,7 +259,7 @@ async def stream(investigation_id: UUID, request: Request, last_event_id: str | 
             if await request.is_disconnected():
                 return
             try:
-                await runner.wait_for_change()
+                await runner.wait_for_change(seen)
             except asyncio.CancelledError:
                 return
 

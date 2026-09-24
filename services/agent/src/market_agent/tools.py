@@ -19,6 +19,7 @@ from .context import ToolResult, TurnContext
 from .schemas import ToolSummary
 
 MAX_CALLS_PER_TURN = 16
+MAX_CALLS_PER_TOOL = 3  # per ticker and turn; stops reworded repeat searches
 MARKET_TOOLS = {
     "get_price_context",
     "detect_market_shock",
@@ -80,13 +81,27 @@ async def call_tool(context: TurnContext, name: str, ticker: str, **arguments: A
             "message": f"{ticker} is outside this investigation. Allowed: {', '.join(scope.members)}.",
         }
     as_of = context.market_cutoff if name in MARKET_TOOLS and context.market_cutoff else scope.as_of
+    as_of = min(as_of, scope.as_of)  # the market session may never extend past the evidence cutoff
     request = {"ticker": ticker, "as_of": as_of.isoformat(), **arguments}
     key = json.dumps([name, request], sort_keys=True)
     async with context.lock:
         if key in context.cache:
             return context.cache[key]
         if len(context.cache) >= MAX_CALLS_PER_TURN:
-            return {"outcome": "blocked", "message": "The evidence-call limit for this turn was reached."}
+            return {
+                "outcome": "blocked",
+                "message": "The evidence-call limit for this turn was reached. Answer now.",
+            }
+        same = sum(
+            1
+            for other in context.cache
+            if json.loads(other)[0] == name and json.loads(other)[1]["ticker"] == ticker
+        )
+        if same >= MAX_CALLS_PER_TOOL:
+            return {
+                "outcome": "blocked",
+                "message": f"{name} was already called {same} times for {ticker}. Use those results.",
+            }
         context.cache[key] = {"outcome": "pending"}
         span = f"tool-{len(context.cache)}"
     await context.progress(
@@ -94,7 +109,7 @@ async def call_tool(context: TurnContext, name: str, ticker: str, **arguments: A
     )
     try:
         result = ToolResult.model_validate(await mcp_call(name, request))
-        late = [item.citation_id for item in result.citations if item.available_at > scope.as_of]
+        late = result.as_of > scope.as_of or any(item.available_at > scope.as_of for item in result.citations)
         if late:
             raise ValueError(f"{name} returned evidence dated after the cutoff")
     except Exception as exc:

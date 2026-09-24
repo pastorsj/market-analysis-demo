@@ -67,15 +67,16 @@ def mentioned_tickers(text: str, coverage: Coverage) -> list[str]:
 def mentioned_date(text: str) -> date | None:
     """The first calendar date written in ``text`` (ISO, US numeric, or English)."""
     candidates: list[tuple[int, date]] = []
-    try:
-        for match in _ISO_DATE.finditer(text):
-            candidates.append((match.start(), date(int(match[1]), int(match[2]), int(match[3]))))
-        for match in _US_DATE.finditer(text):
-            candidates.append((match.start(), date(int(match[3]), int(match[1]), int(match[2]))))
-        for match in _ENGLISH_DATE.finditer(text):
-            candidates.append((match.start(), date(int(match[3]), _MONTHS[match[1].lower()], int(match[2]))))
-    except ValueError:
-        return None
+    matches = [
+        *((m.start(), (m[1], m[2], m[3])) for m in _ISO_DATE.finditer(text)),
+        *((m.start(), (m[3], m[1], m[2])) for m in _US_DATE.finditer(text)),
+        *((m.start(), (m[3], _MONTHS[m[1].lower()], m[2])) for m in _ENGLISH_DATE.finditer(text)),
+    ]
+    for start, (year, month, day) in matches:
+        try:
+            candidates.append((start, date(int(year), int(month), int(day))))
+        except ValueError:
+            continue  # not a real calendar date
     return min(candidates)[1] if candidates else None
 
 

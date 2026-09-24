@@ -46,7 +46,7 @@ register_harness_profile(
     f"openai:{LOCAL_MODEL}",
     HarnessProfile(
         general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
-        excluded_tools=frozenset({"write_file", "edit_file", "delete", "execute", "glob", "grep"}),
+        excluded_tools=frozenset({"ls", "write_file", "edit_file", "delete", "execute", "glob", "grep"}),
         excluded_middleware=frozenset({"SummarizationMiddleware"}),
     ),
 )
@@ -189,9 +189,8 @@ class MarketAgent:
         config = self._config(context)
         state = await self.graph.aget_state(config)
         messages = state.values.get("messages", []) if state and state.values else []
-        start = max(
-            (i for i, message in enumerate(messages) if isinstance(message, HumanMessage)), default=None
-        )
+        turn_id = f"turn-{context.turn}"
+        start = next((i for i, message in enumerate(messages) if message.id == turn_id), None)
         if start is not None:
             await self.graph.aupdate_state(
                 config, {"messages": [RemoveMessage(id=m.id) for m in messages[start:]]}
@@ -206,7 +205,7 @@ class MarketAgent:
                 data={"investigation_id": context.investigation_id, "turn": context.turn},
             ):
                 state = await self.graph.ainvoke(
-                    {"messages": [{"role": "user", "content": question}]},
+                    {"messages": [HumanMessage(content=question, id=f"turn-{context.turn}")]},
                     config=self._config(context),
                     context=context,
                 )
