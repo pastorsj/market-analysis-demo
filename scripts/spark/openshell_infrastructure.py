@@ -42,7 +42,7 @@ def prepare_keys(directory):
         return
     private = run(["openssl", "genpkey", "-algorithm", "Ed25519"])
     public = run(["openssl", "pkey", "-pubout"], input=private)
-    for path, value in zip(paths, [private, public, str(uuid.uuid4()).encode()]):
+    for path, value in zip(paths, [private, public, str(uuid.uuid4()).encode()], strict=True):
         create_private(path, value)
 
 

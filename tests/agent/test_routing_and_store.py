@@ -17,7 +17,6 @@ from market_agent.store import SecretLeak, Store
 from .conftest import scripted, tool_result
 
 
-
 def _request(text="hello"):
     return {"messages": [{"role": "user", "content": [{"type": "text", "text": text}]}]}
 

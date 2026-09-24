@@ -46,7 +46,7 @@ redact() {
   timeout 10 nvidia-smi --query-gpu=name,driver_version,memory.used,memory.total,utilization.gpu --format=csv 2>&1 || true
   timeout 10 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv 2>&1 || true
   printf '\nservice_logs_tail:\n'
-  timeout 15 "${COMPOSE[@]}" logs --no-color --tail 80 web agent tools model 2>&1 | tail -c 65536 || true
+  timeout 15 "${COMPOSE[@]}" logs --no-color --tail 80 web tools model 2>&1 | tail -c 65536 || true
 } | redact >"$temp"
 
 mv -f -- "$temp" "$bundle"

@@ -33,7 +33,7 @@ FILES = {
         "tsconfig.json",
         "vite.config.ts",
     ),
-    "agent": (".dockerignore", "Dockerfile", "pyproject.toml"),
+    "agent": (".dockerignore", "Dockerfile", "pyproject.toml", "uv.lock"),
     "tools": (".dockerignore", "Dockerfile", "pyproject.toml"),
 }
 DIRECTORIES = {
@@ -51,7 +51,7 @@ COPY_SOURCES = {
         "src",
         "nginx.conf",
     ),
-    "agent": ("pyproject.toml", "src", "skills"),
+    "agent": ("pyproject.toml", "uv.lock", "src", "skills"),
     "tools": ("pyproject.toml", "src"),
 }
 IGNORED_PARTS = {
@@ -67,6 +67,18 @@ IGNORED_PARTS = {
 
 class BuildInputError(ValueError):
     """The declared build inputs are missing or unsafe."""
+
+
+def identity(info: os.stat_result) -> tuple[int, ...]:
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_nlink,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+    )
 
 
 def _read_regular_bytes(path: Path, service: str, relative: str) -> tuple[os.stat_result, bytes]:
@@ -86,15 +98,6 @@ def _read_regular_bytes(path: Path, service: str, relative: str) -> tuple[os.sta
             os.close(descriptor)
     except OSError as exc:
         raise BuildInputError(f"unreadable build input: {service}/{relative}") from exc
-    identity = lambda item: (
-        item.st_dev,
-        item.st_ino,
-        item.st_mode,
-        item.st_nlink,
-        item.st_size,
-        item.st_mtime_ns,
-        item.st_ctime_ns,
-    )
     if identity(before) != identity(after) or identity(after) != identity(bound):
         raise BuildInputError(f"changed build input: {service}/{relative}")
     return after, b"".join(chunks)

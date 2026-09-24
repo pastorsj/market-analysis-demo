@@ -25,7 +25,7 @@ python3 "${REPO_ROOT}/scripts/spark/retention.py" verify-start-lock "$retention_
   || spark_die "startup could not verify the guarded retention lock"
 
 spark_require_operator_tools
-spark_require_four_services
+spark_require_compose_services
 spark_require_public_boundary
 if [[ "$recreate_agent" == true ]]; then
   if ! python3 -c \
@@ -73,63 +73,7 @@ docker image inspect "$SPARK_MODEL_IMAGE" >/dev/null 2>&1 \
   || spark_die "runtime image receipt missing; run ./demo prepare"
 [[ -f "${SPARK_MANIFEST_DIR}/runtime-images.json" && ! -L "${SPARK_MANIFEST_DIR}/runtime-images.json" ]] \
   || spark_die "runtime image receipt must be a regular file"
-runtime_rows="$(python3 - "${SPARK_MANIFEST_DIR}/runtime-images.json" "$SPARK_MODEL_IMAGE" <<'PY'
-import json, os, pathlib, re, stat, sys
-
-def closed_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError("duplicate JSON key")
-        result[key] = value
-    return result
-
-path, model_name = pathlib.Path(sys.argv[1]), sys.argv[2]
-try:
-    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600:
-            raise ValueError("receipt file")
-        chunks, size = [], 0
-        while chunk := os.read(descriptor, 65536):
-            size += len(chunk)
-            if size > 65536:
-                raise ValueError("receipt size")
-            chunks.append(chunk)
-        after, bound = os.fstat(descriptor), path.lstat()
-    finally:
-        os.close(descriptor)
-    identity = lambda item: (item.st_dev, item.st_ino, item.st_mode, item.st_nlink, item.st_size, item.st_mtime_ns, item.st_ctime_ns)
-    if identity(before) != identity(after) or identity(after) != identity(bound):
-        raise ValueError("receipt changed")
-    document = json.loads(b"".join(chunks), object_pairs_hook=closed_object)
-    if set(document) != {"schema_version", "images"} or type(document["schema_version"]) is not int or document["schema_version"] != 1:
-        raise ValueError("receipt shape")
-    images = document["images"]
-    names = {
-        "web": "market-shock-web:latest",
-        "agent": "market-shock-agent:latest",
-        "tools": "market-shock-tools:latest",
-        "model": model_name,
-    }
-    if not isinstance(images, dict) or set(images) != set(names):
-        raise ValueError("image roles")
-    for service in ("web", "agent", "tools", "model"):
-        row = images[service]
-        fields = {"name", "id", "build_input_sha256"} if service != "model" else {"name", "id"}
-        if not isinstance(row, dict) or set(row) != fields or row["name"] != names[service]:
-            raise ValueError("image row")
-        if re.fullmatch(r"sha256:[a-f0-9]{64}", str(row["id"])) is None:
-            raise ValueError("image identity")
-        build = row.get("build_input_sha256", "-")
-        if service != "model" and re.fullmatch(r"[a-f0-9]{64}", str(build)) is None:
-            raise ValueError("build identity")
-        print(service, row["name"], row["id"], build, sep="\t")
-except (OSError, UnicodeError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-    raise SystemExit(1)
-PY
-)" || spark_die "runtime image receipt is malformed"
+runtime_rows="$(python3 "${REPO_ROOT}/scripts/spark/process_contract.py" receipt "${SPARK_MANIFEST_DIR}/runtime-images.json")" || spark_die "runtime image receipt is malformed"
 [[ "$(wc -l <<<"$runtime_rows")" -eq 4 ]] || spark_die "runtime image receipt is incomplete"
 declare -A runtime_image_ids
 declare -A receipt_build_inputs
@@ -146,30 +90,18 @@ while IFS=$'\t' read -r service image image_id build_input; do
   fi
 done <<<"$runtime_rows"
 verify_current_build_inputs() {
-  python3 - "$REPO_ROOT" "${receipt_build_inputs[web]}" "${receipt_build_inputs[agent]}" "${receipt_build_inputs[tools]}" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-sys.path.insert(0, str(root))
-from scripts.spark.build_inputs import SCHEMA_VERSION, build_input_digests
-
-expected = dict(zip(("web", "agent", "tools"), sys.argv[2:], strict=True))
-observed = build_input_digests(root)
-raise SystemExit(0 if SCHEMA_VERSION == "market-shock-build-input-v1" and observed == expected else 1)
-PY
+  python3 "${REPO_ROOT}/scripts/spark/build_inputs.py" --json | jq -e \
+    --arg web "${receipt_build_inputs[web]}" --arg agent "${receipt_build_inputs[agent]}" \
+    --arg tools "${receipt_build_inputs[tools]}" \
+    '.schema_version == "market-shock-build-input-v1" and .services == {web: $web, agent: $agent, tools: $tools}' \
+    >/dev/null
 }
 verify_current_build_inputs || spark_die "runtime images are stale for the current source tree"
-"${COMPOSE[@]}" --profile image-only config --format json \
-  | python3 "$(dirname "$0")/process_contract.py" compose \
+compose_config="$("${COMPOSE[@]}" config --format json)"
+python3 "$(dirname "$0")/process_contract.py" compose <<<"$compose_config" \
   || spark_die "Compose executable contract drift"
 if [[ -z "$("${COMPOSE[@]}" ps --status running -q web)" ]] \
-    && python3 - <<'PY'
-import socket
-with socket.socket() as sock:
-    sock.settimeout(0.25)
-    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", 3000)) == 0 else 1)
-PY
+    && timeout 1 bash -c '</dev/tcp/127.0.0.1/3000' 2>/dev/null
 then
   spark_die "host port 3000 is occupied by a process outside this Compose web service"
 fi
@@ -195,7 +127,7 @@ if [[ "$recreate_agent" == true ]]; then
 else
   spark_openshell start
 fi
-spark_openshell_remote_provider_probe >/dev/null \
+spark_agent_remote_probe >&2 \
   || spark_die "remote inference admission failed; run ./demo stop, confirm host network readiness, then run ./demo start --recreate-agent"
 "${COMPOSE[@]}" up -d --no-build --pull never --no-deps --wait \
   --wait-timeout "${SPARK_START_TIMEOUT_SECONDS:-600}" web
@@ -206,19 +138,35 @@ for service in web tools model; do
   [[ "$(docker inspect "$container_id" --format '{{.Image}}')" == "${runtime_image_ids[$service]}" ]] \
     || spark_die "running container image drift: $service"
   image_entrypoint="$(docker image inspect "${runtime_image_ids[$service]}" --format '{{json .Config.Entrypoint}}')"
-  image_command="$(docker image inspect "${runtime_image_ids[$service]}" --format '{{json .Config.Cmd}}')"
+  if [[ "$service" == model ]]; then
+    expected_command="$(jq -c '.services.model.command' <<<"$compose_config")"
+  else
+    expected_command="$(docker image inspect "${runtime_image_ids[$service]}" --format '{{json .Config.Cmd}}')"
+  fi
   container_entrypoint="$(docker inspect "$container_id" --format '{{json .Config.Entrypoint}}')"
   container_command="$(docker inspect "$container_id" --format '{{json .Config.Cmd}}')"
   python3 "$(dirname "$0")/process_contract.py" running "$service" \
-    "$image_entrypoint" "$image_command" "$container_entrypoint" "$container_command" \
+    "$image_entrypoint" "$container_entrypoint" "$expected_command" "$container_command" \
     || spark_die "running container executable drift: $service"
 done
 verify_current_build_inputs || spark_die "source tree changed while the application was starting"
 curl --fail --silent --show-error --max-time 5 \
   "http://127.0.0.1:3000/health" >/dev/null
-spark_wait_api_ready
 spark_require_public_boundary
-spark_openshell status
-spark_log "prepared runtime and API are ready; use ./demo test full for live investigation verification"
+spark_openshell status >/dev/null
+status_code=0
+status_message="$(spark_agent_status 30)" || status_code=$?
 trap - ERR
-printf 'READY FOR DEMO: http://localhost:3000\n'
+case "$status_code" in
+  0) printf 'READY FOR DEMO: http://localhost:3000\n' ;;
+  3)
+    # Everything local is up; the browser shows the same reason and research fails closed.
+    spark_log "$status_message"
+    printf 'PREPARED, RESEARCH DISABLED: http://localhost:3000\n'
+    ;;
+  *)
+    spark_log "agent is not ready: $status_message"
+    "$(dirname "$0")/collect-diagnostics.sh" >&2 || true
+    exit 1
+    ;;
+esac

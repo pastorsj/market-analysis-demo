@@ -14,7 +14,6 @@ from market_agent.runner import Runner
 from market_agent.store import Store
 
 
-
 class FakeAgent:
     """Stands in for MarketAgent: records calls and follows a per-turn plan."""
 
@@ -92,7 +91,7 @@ async def test_stream_replays_events_then_reports_done(client):
 
 async def test_follow_ups_keep_scope_and_stop_at_the_turn_limit(client):
     identifier = await create(client)
-    for number in range(2, MAX_TURNS + 1):
+    for _ in range(2, MAX_TURNS + 1):
         await settle(client, identifier)
         response = await client.post(f"/api/investigations/{identifier}/turns", json={"question": "And AMD?"})
         assert response.status_code == 202

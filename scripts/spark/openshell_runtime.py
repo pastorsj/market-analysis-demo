@@ -13,6 +13,10 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+# Runs as a plain script (also from systemd); sibling modules are imported lazily below.
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 RUNTIME = Path("/srv/market-shock/openshell")
 CLI = RUNTIME / "0.0.116/openshell"
 PREPARED = RUNTIME / "prepared"
@@ -27,16 +31,13 @@ AGENT_COMMAND = [
     "--port",
     "2024",
 ]
-sys.path.insert(0, str(ROOT))
-from scripts.spark.build_inputs import build_input_digests
-from scripts.spark.openshell_receipt import create_receipt, validate_receipt
-from scripts.spark import retention
 
-RETENTION_ROOT = retention.ROOT
 RETENTION_LOCKED_ACTIONS = frozenset({"launch", "start", "recreate", "stop"})
 
 
 def image_identity():
+    from scripts.spark.build_inputs import build_input_digests
+
     info = json.loads(run(["docker", "image", "inspect", "market-shock-agent:latest"]))[0]
     digest = build_input_digests(ROOT)["agent"]
     if info["Config"]["Labels"].get("com.nvidia.market-shock.build-input-sha256") != digest:
@@ -47,6 +48,8 @@ def image_identity():
 
 
 def prepare_receipt():
+    from scripts.spark.openshell_receipt import create_receipt
+
     for filename in ("openshell", "openshell-gateway"):
         if run([RUNTIME / "0.0.116" / filename, "--version"]).strip() != f"{filename} 0.0.116":
             raise RuntimeError("OpenShell version mismatch")
@@ -71,6 +74,8 @@ def prepare_receipt():
 
 
 def verify():
+    from scripts.spark.openshell_receipt import validate_receipt
+
     image_id, digest = image_identity()
     path = PREPARED / "runtime.json"
     if path.is_symlink() or path.stat().st_mode & 0o077:
@@ -345,11 +350,13 @@ def status():
             "--",
             "/usr/local/bin/python3.12",
             "-c",
-            'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:2024/api/status", timeout=10).read().decode())',
+            'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:2024/health/ready", timeout=10).read().decode())',
         )
     )
-    if not health.get("ready"):
-        raise RuntimeError("Agent dependencies not ready")
+    # Remote routing may be off (research disabled); the sandbox is still healthy
+    # when the agent answers and reaches its local tools and model.
+    if health.get("service") != "agent" or health.get("tools") is not True or health.get("model") is not True:
+        raise RuntimeError("Agent cannot reach its local tools and model")
     container_id = container.get("Id") or container_id
     config_sha256 = hashlib.sha256(
         json.dumps(
@@ -368,8 +375,11 @@ def status():
                 "sandbox_id": observed["id"],
                 "container_id": container_id,
                 "container_config_sha256": config_sha256,
-                "tools": health["dependencies"]["tools"],
-                "model": health["dependencies"]["model"],
+                "tools": health["tools"],
+                "model": health["model"],
+                "events": health.get("events"),
+                "research_ready": health.get("ready") is True,
+                "reason": health.get("reason"),
             }
         )
     )
@@ -472,6 +482,8 @@ def recreate():
 
 def acquire_action_lock(action):
     """Lock direct sandbox creation/start once at the supported CLI boundary."""
+    from scripts.spark import retention
+
     if action not in RETENTION_LOCKED_ACTIONS:
         return None
     inherited = os.environ.get("SPARK_RETENTION_LOCK_FD")
@@ -479,9 +491,9 @@ def acquire_action_lock(action):
         if inherited is not None:
             if not inherited.isdigit():
                 raise retention.RetentionError("invalid inherited retention lock")
-            retention.verify_retention_lock(int(inherited), RETENTION_ROOT)
+            retention.verify_retention_lock(int(inherited), retention.ROOT)
             return None
-        return retention.acquire_retention_lock(RETENTION_ROOT)
+        return retention.acquire_retention_lock(retention.ROOT)
     except retention.RetentionError:
         raise RuntimeError("OpenShell start/recreation is blocked by the retention/start lock") from None
 

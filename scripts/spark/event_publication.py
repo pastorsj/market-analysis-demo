@@ -18,8 +18,6 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from scripts.data.event_contract import EventContractError, validate_prepared_catalog
-
 
 DIGEST = re.compile(r"[0-9a-f]{64}")
 ARTIFACT_ID = re.compile(r"shock-events-[0-9a-f]{16}")
@@ -72,6 +70,18 @@ def _need(condition: bool, code: str) -> None:
         raise EventPublicationError(code)
 
 
+def identity(value: os.stat_result) -> tuple[int, ...]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
 def _stable_bytes(path: Path, maximum: int, code: str) -> bytes:
     try:
         before = path.lstat()
@@ -81,15 +91,6 @@ def _stable_bytes(path: Path, maximum: int, code: str) -> bytes:
         )
         body = path.read_bytes()
         after = path.lstat()
-        identity = lambda value: (
-            value.st_dev,
-            value.st_ino,
-            value.st_mode,
-            value.st_nlink,
-            value.st_size,
-            value.st_mtime_ns,
-            value.st_ctime_ns,
-        )
         _need(len(body) == before.st_size and identity(before) == identity(after), code)
         return body
     except OSError as exc:
@@ -232,6 +233,9 @@ def verify_binding(
         "event_artifact_digest",
     )
     _need(set(payload) == CATALOG_FIELDS, "event_artifact_catalog")
+    # Imported here so the module also runs as a plain script (see sys.path above).
+    from scripts.data.event_contract import EventContractError, validate_prepared_catalog
+
     try:
         validate_prepared_catalog(payload)
     except EventContractError as exc:

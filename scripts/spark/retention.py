@@ -554,13 +554,12 @@ def main():
             else:
                 result = getattr(store, args.action)(manifest)
         print(json.dumps(result, sort_keys=True))
-    except (RetentionError, OSError, ValueError, KeyError, TypeError):
+    except (RetentionError, OSError, ValueError, KeyError, TypeError) as error:
         # Never include file contents or arbitrary upstream output in operator errors.
-        error = sys.exception()
         message = (
             str(error) if isinstance(error, RetentionError) else "retention inventory/operation failed closed"
         )
-        raise SystemExit(message)
+        raise SystemExit(message) from None
 
 
 if __name__ == "__main__":

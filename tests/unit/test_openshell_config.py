@@ -62,7 +62,6 @@ def test_disabled_remote_and_telemetry_have_no_network_grants():
         {"NVIDIA_INFERENCE_API_KEY": ""},
         {"NVIDIA_BASE_URL": ""},
         {"REMOTE_ROUTING_ENABLED": "maybe"},
-        {"UNREVIEWED_TOKEN": "secret"},
         {"NVIDIA_BASE_URL": "https://user:secret@example.com/v1"},
         {"LANGSMITH_ENDPOINT": "https://example.com?token=secret"},
         {"LANGSMITH_PROJECT_URL": "http://smith.langchain.com/o/a/projects/p/b"},
@@ -140,10 +139,48 @@ def test_private_files_and_no_symlink_follow(tmp_path):
     assert json.loads(path.read_text()) == {"safe": True}
 
 
+ENV_FILE = """
+# comment
+REMOTE_ROUTING_ENABLED=true
+NVIDIA_BASE_URL=https://inference.example/v1
+NVIDIA_INFERENCE_API_KEY="secret-inference"
+LANGSMITH_TRACING=true
+LANGSMITH_ENDPOINT=
+LANGSMITH_API_KEY='secret-langsmith'
+LANGSMITH_PROJECT=demo
+LANGSMITH_PROJECT_URL=https://smith.langchain.com/o/11111111-1111-1111-1111-111111111111/projects/p/22222222-2222-2222-2222-222222222222
+"""
+
+
+def test_agent_environment_maps_the_env_file(tmp_path):
+    path = tmp_path / "private.env"
+    path.write_text(ENV_FILE)
+    env = config.agent_environment(config.read_env_file(path))
+    assert env["NVIDIA_INFERENCE_API_KEY"] == "secret-inference"
+    assert env["LANGSMITH_API_KEY"] == "secret-langsmith"
+    assert env["NEMO_RELAY_LANGSMITH_ENABLED"] == "true"
+    assert env["LANGSMITH_ENDPOINT"] == "https://api.smith.langchain.com"  # empty -> default
+    assert env["MARKET_SHOCK_SCENARIO_ROOT"] == "/srv/market-shock/scenario"
+    assert set(env) == config.SAFE_KEYS | config.SECRET_KEYS
+
+
+def test_defaults_keep_remote_routing_off():
+    env = config.agent_environment({})
+    assert env["REMOTE_ROUTING_ENABLED"] == "false"
+    assert env["NEMO_RELAY_LANGSMITH_ENABLED"] == "false"
+
+
+def test_env_file_rejects_non_assignments(tmp_path):
+    path = tmp_path / "broken.env"
+    path.write_text("REMOTE_ROUTING_ENABLED true\n")
+    with pytest.raises(config.PreparationError):
+        config.read_env_file(path)
+
+
 def test_failed_preparation_invalidates_old_readiness(tmp_path, monkeypatch):
     (tmp_path / "providers.json").write_text("[]")
-    monkeypatch.setattr(config, "command", lambda *args, **kwargs: "invalid-json")
-    with pytest.raises(ValueError):
+    monkeypatch.setenv("COMPOSE_ENV_FILE", str(tmp_path / "missing.env"))
+    with pytest.raises(OSError):
         config.prepare(tmp_path, tmp_path / "unused")
     assert not (tmp_path / "providers.json").exists()
 
@@ -151,13 +188,14 @@ def test_failed_preparation_invalidates_old_readiness(tmp_path, monkeypatch):
 def test_full_preparation_writes_no_secrets(tmp_path, monkeypatch):
     base = tmp_path / "base.yaml"
     base.write_text("network_policies: {}")
+    env_file = tmp_path / "private.env"
+    env_file.write_text(ENV_FILE)
+    monkeypatch.setenv("COMPOSE_ENV_FILE", str(env_file))
     output = tmp_path / "prepared"
     calls = []
 
     def fake(args, env=None):
         calls.append((args, env))
-        if args[0] == "docker":
-            return json.dumps({"services": {"agent": {"environment": environment()}}})
         return ""
 
     monkeypatch.setattr(config, "command", fake)
@@ -167,24 +205,11 @@ def test_full_preparation_writes_no_secrets(tmp_path, monkeypatch):
         assert "secret-langsmith" not in path.read_text()
         assert path.stat().st_mode & 0o777 == 0o600
     assert len(json.loads((output / "providers.json").read_text())) == 2
-    for argv, child_env in calls:
+    for argv, _env in calls:
         assert "secret-inference" not in repr(argv)
         assert "secret-langsmith" not in repr(argv)
     settings = next(argv for argv, _ in calls if "settings" in argv)
     assert "--yes" in settings
-    compose = calls[0][0]
-    assert compose[2:4] == ["--profile", "image-only"]
-
-
-def test_custom_compose_environment_file(tmp_path, monkeypatch):
-    seen = []
-    monkeypatch.setenv("COMPOSE_ENV_FILE", "/private/approved.env")
-
-    def capture(args, **kwargs):
-        seen.append(args)
-        raise config.PreparationError("stop before gateway")
-
-    monkeypatch.setattr(config, "command", capture)
-    with pytest.raises(config.PreparationError):
-        config.prepare(tmp_path, tmp_path / "unused")
-    assert seen[0][2:6] == ["--env-file", "/private/approved.env", "--profile", "image-only"]
+    launch_env = json.loads((output / "env.json").read_text())
+    assert launch_env["REMOTE_ROUTING_ENABLED"] == "true"
+    assert not config.SECRET_KEYS.intersection(launch_env)

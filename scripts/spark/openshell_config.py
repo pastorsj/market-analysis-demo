@@ -1,7 +1,9 @@
 """Prepare endpoint-bound OpenShell providers without persisting credentials.
 
-Run with the agent virtualenv (PyYAML installed). Only explicitly approved
-non-secret Compose environment keys are exported into the sandbox launch file.
+Reads the operator environment file (COMPOSE_ENV_FILE, else .env, else
+.env.spark.example), maps it onto the agent's fixed environment, stores the
+credentials only in gateway-managed providers, and writes the non-secret rest
+to the sandbox launch file. Needs PyYAML (host python3 or the agent virtualenv).
 """
 
 from __future__ import annotations
@@ -21,23 +23,26 @@ ROOT = Path(__file__).resolve().parents[2]
 RUNTIME = Path("/srv/market-shock/openshell")
 CLI = RUNTIME / "0.0.116/openshell"
 PYTHON = "/usr/local/bin/python3.12"
-SAFE_KEYS = {
-    "HOME",
-    "REMOTE_ROUTING_ENABLED",
-    "NVIDIA_BASE_URL",
-    "LLM_MODEL",
-    "SWITCHYARD_JUDGE_MODEL",
-    "MARKET_SHOCK_STATE_ROOT",
-    "MARKET_SHOCK_SCENARIO_ROOT",
-    "MARKET_SHOCK_EVENT_CATALOG_ROOT",
-    "MARKET_SHOCK_DATA_GATE",
-    "NEMO_RELAY_TRACE_DIRECTORY",
-    "NEMO_RELAY_LANGSMITH_ENABLED",
-    "LANGSMITH_PROJECT",
-    "LANGSMITH_ENDPOINT",
-    "LANGSMITH_PROJECT_URL",
+# Agent variables that do not depend on operator configuration.
+FIXED_ENV = {
+    "MARKET_SHOCK_STATE_ROOT": "/srv/market-shock/state",
+    "MARKET_SHOCK_SCENARIO_ROOT": "/srv/market-shock/scenario",
+    "MARKET_SHOCK_EVENT_CATALOG_ROOT": "/srv/market-shock/events/current",
+    "NEMO_RELAY_TRACE_DIRECTORY": "/srv/market-shock/traces",
+}
+# Agent variable -> (environment-file key, default when unset or empty).
+FILE_ENV = {
+    "REMOTE_ROUTING_ENABLED": ("REMOTE_ROUTING_ENABLED", "false"),
+    "NVIDIA_BASE_URL": ("NVIDIA_BASE_URL", ""),
+    "NVIDIA_INFERENCE_API_KEY": ("NVIDIA_INFERENCE_API_KEY", ""),
+    "NEMO_RELAY_LANGSMITH_ENABLED": ("LANGSMITH_TRACING", "false"),
+    "LANGSMITH_API_KEY": ("LANGSMITH_API_KEY", ""),
+    "LANGSMITH_PROJECT": ("LANGSMITH_PROJECT", ""),
+    "LANGSMITH_PROJECT_URL": ("LANGSMITH_PROJECT_URL", ""),
+    "LANGSMITH_ENDPOINT": ("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"),
 }
 SECRET_KEYS = {"NVIDIA_INFERENCE_API_KEY", "LANGSMITH_API_KEY"}
+SAFE_KEYS = (set(FIXED_ENV) | set(FILE_ENV)) - SECRET_KEYS
 
 
 class PreparationError(RuntimeError):
@@ -84,6 +89,35 @@ def openshell(*args: str, credential: tuple[str, str] | None = None) -> str:
         raise PreparationError(
             f"OpenShell {stage} failed; command output withheld to protect credentials."
         ) from None
+
+
+def env_file() -> Path:
+    if os.environ.get("COMPOSE_ENV_FILE"):
+        return Path(os.environ["COMPOSE_ENV_FILE"])
+    return ROOT / ".env" if (ROOT / ".env").is_file() else ROOT / ".env.spark.example"
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """Parse KEY=VALUE lines (comments, blank lines, and surrounding quotes allowed)."""
+    values = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.removeprefix("export ").partition("=")
+        if not separator or not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key.strip()):
+            raise PreparationError("Environment file has a line that is not KEY=VALUE.")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        values[key.strip()] = value
+    return values
+
+
+def agent_environment(values: dict[str, str]) -> dict[str, str]:
+    """The agent's complete environment, including credentials (never written to disk)."""
+    mapped = {name: values.get(key) or default for name, (key, default) in FILE_ENV.items()}
+    return {**FIXED_ENV, **mapped}
 
 
 def enabled(value: str) -> bool:
@@ -143,11 +177,6 @@ def project_link(url: str) -> str:
 
 
 def prepare_inputs(environment: dict[str, str], policy: dict) -> tuple[dict, dict, list]:
-    unknown = set(environment) - SAFE_KEYS - SECRET_KEYS
-    if unknown:
-        raise PreparationError(
-            "Compose agent environment contains unreviewed keys; update the explicit allowlist."
-        )
     safe = {key: str(value) for key, value in environment.items() if key in SAFE_KEYS and value is not None}
     project = safe.get("LANGSMITH_PROJECT_URL", "").strip()
     tracing = enabled(safe.get("NEMO_RELAY_LANGSMITH_ENABLED", "false"))
@@ -212,12 +241,8 @@ def prepare(output: Path, base_policy: Path) -> None:
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
     receipt = output / "providers.json"
     receipt.unlink(missing_ok=True)
-    compose_args = ["docker", "compose"]
-    if os.environ.get("COMPOSE_ENV_FILE"):
-        compose_args += ["--env-file", os.environ["COMPOSE_ENV_FILE"]]
-    compose = json.loads(command([*compose_args, "--profile", "image-only", "config", "--format", "json"]))
     safe, policy, profiles = prepare_inputs(
-        compose["services"]["agent"]["environment"], yaml.safe_load(base_policy.read_text())
+        agent_environment(read_env_file(env_file())), yaml.safe_load(base_policy.read_text())
     )
     openshell("status")
     openshell("settings", "set", "--global", "--key", "providers_v2_enabled", "--value", "true", "--yes")

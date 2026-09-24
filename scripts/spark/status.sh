@@ -4,7 +4,7 @@ source "$(dirname "$0")/lib.sh"
 
 [[ $# -eq 0 ]] || spark_die "usage: $0"
 spark_require_operator_tools
-spark_require_four_services
+spark_require_compose_services
 spark_require_public_boundary
 
 printf 'DGX Spark Market Shock Investigator\n'
@@ -40,12 +40,16 @@ artifact_status "foundation" "${SPARK_REPORT_DIR}/compatibility.json" pass
 printf '\nContainers:\n'
 "${COMPOSE[@]}" ps
 printf '\nOpenShell:\n'
-spark_openshell status
+spark_openshell status || printf '  agent sandbox is not ready\n'
 
-if curl --fail --silent --max-time 3 "http://127.0.0.1:3000/health" >/dev/null \
-    && spark_api_ready >/dev/null 2>&1; then
-  printf '\nREADY: http://localhost:3000\n'
-else
-  printf '\nNOT READY: browser health or agent readiness is unavailable\n'
+if ! curl --fail --silent --max-time 3 "http://127.0.0.1:3000/health" >/dev/null; then
+  printf '\nNOT READY: web is not answering on http://localhost:3000\n'
   exit 1
 fi
+status_code=0
+status_message="$(spark_agent_status 1)" || status_code=$?
+case "$status_code" in
+  0) printf '\nREADY: http://localhost:3000\n' ;;
+  3) printf '\nPREPARED, RESEARCH DISABLED: %s\n' "$status_message"; exit 1 ;;
+  *) printf '\nNOT READY: %s\n' "$status_message"; exit 1 ;;
+esac
