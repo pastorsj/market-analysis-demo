@@ -128,9 +128,7 @@ class AnswerSubmission:
         return "Validated answer accepted. End the task now."
 
 
-def _submission_tool(
-    submission: AnswerSubmission, decision: PolicyDecision
-) -> BaseTool:
+def _submission_tool(submission: AnswerSubmission, decision: PolicyDecision) -> BaseTool:
     if decision.kind == PolicyKind.SUPPORTED:
         args_schema: type[BaseModel] = ResearchAnswerInput
 

@@ -112,8 +112,13 @@ def receipt_image_id(path: Path, role: str) -> str:
     if role == "market-prep":
         receipt = _loads(_receipt_bytes(path, 0o644))
         fields = {
-            "schema_version", "image", "image_id", "architecture",
-            "base_digest", "lock_sha256", "scope",
+            "schema_version",
+            "image",
+            "image_id",
+            "architecture",
+            "base_digest",
+            "lock_sha256",
+            "scope",
         }
         if not isinstance(receipt, dict) or set(receipt) != fields:
             raise ContractError("market-prep receipt shape")
@@ -141,12 +146,22 @@ def receipt_image_id(path: Path, role: str) -> str:
         "tools": "market-shock-tools:latest",
         "model": "vllm/vllm-openai:v0.27.1@sha256:0a51ea5b4ae2dc5d81890e5173f54203d2a3ae0cfffe51b8fd2afd4391bfd967",
     }
-    if type(receipt["schema_version"]) is not int or receipt["schema_version"] != 1 or not isinstance(images, dict) or set(images) != set(names):
+    if (
+        type(receipt["schema_version"]) is not int
+        or receipt["schema_version"] != 1
+        or not isinstance(images, dict)
+        or set(images) != set(names)
+    ):
         raise ContractError("runtime receipt shape")
     for service, name in names.items():
         row = images[service]
         fields = {"name", "id"} | ({"build_input_sha256"} if service != "model" else set())
-        if not isinstance(row, dict) or set(row) != fields or row.get("name") != name or IMAGE_ID.fullmatch(str(row.get("id"))) is None:
+        if (
+            not isinstance(row, dict)
+            or set(row) != fields
+            or row.get("name") != name
+            or IMAGE_ID.fullmatch(str(row.get("id"))) is None
+        ):
             raise ContractError("runtime receipt binding")
         if service != "model" and HEX_DIGEST.fullmatch(str(row.get("build_input_sha256"))) is None:
             raise ContractError("runtime receipt binding")

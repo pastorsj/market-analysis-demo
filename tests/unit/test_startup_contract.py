@@ -12,10 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_piped_status_document_is_separate_from_validator_program_stdin():
     library = (ROOT / "scripts/spark/lib.sh").read_text(encoding="utf-8")
     validator = library.split("spark_validate_public_status()", 1)[1].split(
-        "spark_openshell_generation_canary()", 1,
+        "spark_openshell_generation_canary()",
+        1,
     )[0]
 
-    assert 'python3 - "$source" 3<&0 <<\'PY\'' in validator
+    assert "python3 - \"$source\" 3<&0 <<'PY'" in validator
     assert 'raw = os.fdopen(3).read() if sys.argv[1] == "-"' in validator
 
 
@@ -24,7 +25,8 @@ def test_remote_admission_precedes_web_and_ready():
     start = (ROOT / "scripts/spark/start.sh").read_text(encoding="utf-8")
     doctor = (ROOT / "scripts/spark/doctor.sh").read_text(encoding="utf-8")
     probe = library.split("spark_openshell_remote_provider_probe()", 1)[1].split(
-        "spark_openshell_maintenance_acquire()", 1,
+        "spark_openshell_maintenance_acquire()",
+        1,
     )[0]
 
     admission = start.index("spark_openshell_remote_provider_probe")

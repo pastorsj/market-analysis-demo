@@ -8,8 +8,8 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Mapping
+from datetime import datetime, UTC
+from collections.abc import Mapping
 
 from .evidence import EvidenceRun
 from .planning import EvidencePlan
@@ -45,9 +45,7 @@ def evidence_reference_tickers(run: EvidenceRun) -> tuple[str, ...]:
                 for item in row.get("coverage", [])
                 if isinstance(item, Mapping) and item.get("dimension") == "instrument"
             ]
-            available = {
-                item.get("key") for item in coverage if item.get("status") != "missing"
-            } - {
+            available = {item.get("key") for item in coverage if item.get("status") != "missing"} - {
                 item.get("key") for item in coverage if item.get("status") == "missing"
             }
             evidence = [
@@ -74,9 +72,7 @@ def evidence_reference_tickers(run: EvidenceRun) -> tuple[str, ...]:
                     if sources.get(evidence_id) == "model"
                     and isinstance(values.get("analogue_ticker"), str)
                     and (evidence_id, values["analogue_ticker"]) in declared
-                    and re.fullmatch(
-                        r"[A-Z][A-Z0-9.\-]{0,9}", values["analogue_ticker"]
-                    )
+                    and re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,9}", values["analogue_ticker"])
                 }
             if record.identity.tool == "trace_shock_propagation":
                 paths = row.get("data", {}).get("paths", [])
@@ -89,8 +85,7 @@ def evidence_reference_tickers(run: EvidenceRun) -> tuple[str, ...]:
                     (values.get("from"), values.get("to"))
                     for evidence_id, values in evidence
                     if sources.get(evidence_id) == "relationship"
-                    and (values.get("from"), values.get("to"), values.get("relation"))
-                    in declared
+                    and (values.get("from"), values.get("to"), values.get("relation")) in declared
                     and all(
                         isinstance(values.get(key), str)
                         and re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,9}", values[key])
@@ -100,11 +95,7 @@ def evidence_reference_tickers(run: EvidenceRun) -> tuple[str, ...]:
                 depth = record.identity.arguments.get("max_depth")
                 start = record.identity.arguments.get("ticker")
                 valid_depth = type(depth) is int and 1 <= depth <= 3
-                one = (
-                    {target for source, target in edges if source == start}
-                    if valid_depth
-                    else set()
-                )
+                one = {target for source, target in edges if source == start} if valid_depth else set()
                 two = (
                     {target for source, target in edges if source in one}
                     if valid_depth and depth >= 2
@@ -116,9 +107,7 @@ def evidence_reference_tickers(run: EvidenceRun) -> tuple[str, ...]:
                     else set()
                 )
                 reachable = {start} | one | two | three
-                allowed |= {
-                    value for edge in edges for value in edge if value in reachable
-                }
+                allowed |= {value for edge in edges for value in edge if value in reachable}
     return tuple(sorted(allowed))
 
 
@@ -129,14 +118,8 @@ def accepted_evidence(
     *,
     normalize_scope: bool = False,
 ):
-    members = plan.resolved_members or (
-        (scope.ticker,) if normalize_scope and scope.ticker else ()
-    )
-    if (
-        plan.status != "ready"
-        or run.plan_id != plan.plan_id
-        or run.status not in {"completed", "partial"}
-    ):
+    members = plan.resolved_members or ((scope.ticker,) if normalize_scope and scope.ticker else ())
+    if plan.status != "ready" or run.plan_id != plan.plan_id or run.status not in {"completed", "partial"}:
         raise ValueError("evidence_integrity")
     if (
         not members
@@ -156,29 +139,37 @@ def accepted_evidence(
         ): item
         for item in plan.required_calls + plan.optional_calls
     }
-    cutoff = scope.as_of.astimezone(timezone.utc); market_cutoff = (scope.market_as_of or cutoff).astimezone(timezone.utc)
+    cutoff = scope.as_of.astimezone(UTC)
+    market_cutoff = (scope.market_as_of or cutoff).astimezone(UTC)
     document_tools = {"search_news", "project_news_topics"}
-    call_cutoffs = {key: datetime.fromisoformat(str(item.arguments["as_of"]).replace("Z", "+00:00")) for key, item in calls.items()}
-    market_cutoffs = {value for key, value in call_cutoffs.items() if key[0] not in document_tools}
-    if len(run.records) != len(calls) or market_cutoffs not in (set(), {market_cutoff}) or any(
-        item.arguments["ticker"] not in members or call_cutoffs[key] > cutoff or item.tool in document_tools and call_cutoffs[key] != cutoff
+    call_cutoffs = {
+        key: datetime.fromisoformat(str(item.arguments["as_of"]).replace("Z", "+00:00"))
         for key, item in calls.items()
+    }
+    market_cutoffs = {value for key, value in call_cutoffs.items() if key[0] not in document_tools}
+    if (
+        len(run.records) != len(calls)
+        or market_cutoffs not in (set(), {market_cutoff})
+        or any(
+            item.arguments["ticker"] not in members
+            or call_cutoffs[key] > cutoff
+            or item.tool in document_tools
+            and call_cutoffs[key] != cutoff
+            for key, item in calls.items()
+        )
     ):
         raise ValueError("scope_integrity")
     rows, citations, artifacts, receipts = [], {}, {}, []
     for record in run.records:
         key = (
             record.identity.tool,
-            json.dumps(
-                record.identity.arguments, sort_keys=True, separators=(",", ":")
-            ),
+            json.dumps(record.identity.arguments, sort_keys=True, separators=(",", ":")),
         )
         ticker = record.identity.arguments["ticker"]
         if (
             key not in calls
             or record.identity.primary_ticker != members[0]
-            or record.identity.comparison_ticker
-            != (None if ticker == members[0] else ticker)
+            or record.identity.comparison_ticker != (None if ticker == members[0] else ticker)
         ):
             raise ValueError("evidence_integrity")
         if record.result is None:
@@ -199,10 +190,7 @@ def accepted_evidence(
             or row.get("as_of") != record.identity.effective_cutoff
             or record.identity.effective_cutoff != record.identity.arguments["as_of"]
             or any(receipt.get(name) != value for name, value in expected.items())
-            or any(
-                item.get("evidence_id") not in evidence_ids
-                for item in row.get("citations", [])
-            )
+            or any(item.get("evidence_id") not in evidence_ids for item in row.get("citations", []))
         ):
             raise ValueError("evidence_integrity")
         for name, identity, values in (

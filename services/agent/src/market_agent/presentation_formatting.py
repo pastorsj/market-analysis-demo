@@ -91,13 +91,8 @@ def presentation_eligibility(answer: str) -> PresentationEligibility:
     list_item_count = len(_LIST_ITEM.findall(normalized))
     section_cue_count = len(_SECTION_CUE.findall(normalized))
     long_answer = character_count >= PRESENTATION_LONG_ANSWER_CHARS
-    structured_answer = (
-        character_count >= PRESENTATION_STRUCTURED_ANSWER_CHARS
-        and (
-            len(blocks) >= PRESENTATION_STRUCTURED_BLOCKS
-            or list_item_count >= 2
-            or section_cue_count >= 2
-        )
+    structured_answer = character_count >= PRESENTATION_STRUCTURED_ANSWER_CHARS and (
+        len(blocks) >= PRESENTATION_STRUCTURED_BLOCKS or list_item_count >= 2 or section_cue_count >= 2
     )
     reason: Literal["long_answer", "structured_answer", "compact_answer"]
     if long_answer:
@@ -166,8 +161,7 @@ def presentation_packet(question: str, blocks: Sequence[SourceBlock]) -> str:
         {
             "question": question,
             "immutable_blocks": [
-                {"position": index, "text": item.text}
-                for index, item in enumerate(blocks, 1)
+                {"position": index, "text": item.text} for index, item in enumerate(blocks, 1)
             ],
             "contract": {
                 "one_style_per_position": len(blocks),

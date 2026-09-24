@@ -32,15 +32,9 @@ def _research_draft(
     """Attach the model's prose only to evidence accepted for this run."""
     _, _, citations, *_ = accepted_evidence(decision.scope, plan, run)
     available = tuple(item.citation_id for item in citations)
-    requested = tuple(
-        dict.fromkeys(item for item in answer.citation_ids if item in available)
-    )
+    requested = tuple(dict.fromkeys(item for item in answer.citation_ids if item in available))
     selected = (
-        (
-            _analogue_claim_citation_ids(citations, run)
-            if Intent.ANALOGUE in plan.intents
-            else requested
-        )
+        (_analogue_claim_citation_ids(citations, run) if Intent.ANALOGUE in plan.intents else requested)
         or requested
         or available[:12]
     )
@@ -106,11 +100,7 @@ async def finalize_answer(
             "failure_code": "invalid_schema",
         }
     synthesis_attempt = next(
-        (
-            item
-            for item in reversed(attempts)
-            if item.role == "agent_reasoning" and item.state == "succeeded"
-        ),
+        (item for item in reversed(attempts) if item.role == "agent_reasoning" and item.state == "succeeded"),
         None,
     )
     if synthesis_attempt is None:
@@ -134,20 +124,13 @@ async def finalize_answer(
                 if decision.kind == PolicyKind.REFUSAL
                 else (
                     "help"
-                    if decision.kind
-                    in {PolicyKind.PRODUCT_HELP, PolicyKind.CONVERSATION}
-                    else (
-                        "clarification"
-                        if decision.kind == PolicyKind.CLARIFICATION
-                        else "partial"
-                    )
+                    if decision.kind in {PolicyKind.PRODUCT_HELP, PolicyKind.CONVERSATION}
+                    else ("clarification" if decision.kind == PolicyKind.CLARIFICATION else "partial")
                 )
             )
         elif plan is None or run is None:
             raise ValueError("invalid_evidence")
-        elif all(
-            item.result and item.result["outcome"] == "no_data" for item in run.records
-        ):
+        elif all(item.result and item.result["outcome"] == "no_data" for item in run.records):
             if not isinstance(answer, ResearchAnswer):
                 raise ValueError("invalid_schema")
             guide = GuideDraft(
@@ -196,8 +179,7 @@ async def finalize_answer(
                 )
             elif presented.attempt is not None:
                 formatted_claims = tuple(
-                    item.model_copy(update={"text": presented.markdown})
-                    for item in draft.claims
+                    item.model_copy(update={"text": presented.markdown}) for item in draft.claims
                 )
                 draft = draft.model_copy(
                     update={

@@ -2,3 +2,12 @@
 testpaths = ["tests"]
 addopts = "--strict-markers"
 markers = ["unit", "contract", "integration", "gpu"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["apps"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = ["E501"]

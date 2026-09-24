@@ -51,9 +51,7 @@ def test_relay_codec_keeps_one_multi_tool_assistant_boundary_for_switchyard() ->
     assert [call["id"] for call in assistants[0].tool_calls] == expected_ids
     assert all(message.content or message.tool_calls for message in assistants)
     assert [
-        message.tool_call_id
-        for message in round_tripped
-        if isinstance(message, ToolMessage)
+        message.tool_call_id for message in round_tripped if isinstance(message, ToolMessage)
     ] == expected_ids
 
     mapped = SwitchyardRequestMapper.to_switchyard(
@@ -63,8 +61,6 @@ def test_relay_codec_keeps_one_multi_tool_assistant_boundary_for_switchyard() ->
         model_settings={},
         stop=None,
     )
-    assistant_turns = [
-        turn for turn in mapped["messages"] if turn["role"] == "assistant"
-    ]
+    assistant_turns = [turn for turn in mapped["messages"] if turn["role"] == "assistant"]
     assert len(assistant_turns) == 1
     assert [block["id"] for block in assistant_turns[0]["content"]] == expected_ids

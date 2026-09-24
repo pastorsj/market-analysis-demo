@@ -11,9 +11,7 @@ from .deep_answers import _normalize_answer_prose
 from .evidence import EvidenceRun
 
 
-def _analogue_claim_citation_ids(
-    citations: tuple[Any, ...], run: EvidenceRun
-) -> tuple[str, ...]:
+def _analogue_claim_citation_ids(citations: tuple[Any, ...], run: EvidenceRun) -> tuple[str, ...]:
     """Bind analogue prose to target-shock and ranking evidence, not model-picked IDs."""
     available = {item.citation_id for item in citations}
     target_id: str | None = None
@@ -29,9 +27,7 @@ def _analogue_claim_citation_ids(
             and str(item.get("title", "")).startswith("Observed ")
         ]
         fallback = [
-            item
-            for item in rows
-            if isinstance(item, Mapping) and item.get("citation_id") in available
+            item for item in rows if isinstance(item, Mapping) and item.get("citation_id") in available
         ]
         selected = observed[-1:] or fallback[:1]
         if selected:
@@ -99,13 +95,8 @@ def _canonical_analogue_prose(data: Mapping[str, Any]) -> str | None:
     target_ticker = str(target.get("ticker") or "").strip()
     target_date = str(target.get("session_date") or "").strip()
     if (
-        any(
-            value is None or value <= 0
-            for value in (absolute_scale, volume_scale, absolute_cap, volume_cap)
-        )
-        or any(
-            value is None for value in (target_signed, target_absolute, target_volume)
-        )
+        any(value is None or value <= 0 for value in (absolute_scale, volume_scale, absolute_cap, volume_cap))
+        or any(value is None for value in (target_signed, target_absolute, target_volume))
         or not target_ticker
         or not target_date
     ):
@@ -115,9 +106,7 @@ def _canonical_analogue_prose(data: Mapping[str, Any]) -> str | None:
     assert absolute_cap is not None and volume_cap is not None
     assert target_signed is not None and target_absolute is not None
     assert target_volume is not None
-    target_direction = (
-        "up" if target_signed > 0 else "down" if target_signed < 0 else "flat"
-    )
+    target_direction = "up" if target_signed > 0 else "down" if target_signed < 0 else "flat"
     rows: list[str] = []
     match_count = 0
     for index, item in enumerate(analogues, start=1):
@@ -143,12 +132,10 @@ def _canonical_analogue_prose(data: Mapping[str, Any]) -> str | None:
         absolute_delta = absolute - target_absolute
         volume_delta = volume - target_volume
         absolute_component = (
-            min(absolute / absolute_scale, absolute_cap)
-            - min(target_absolute / absolute_scale, absolute_cap)
+            min(absolute / absolute_scale, absolute_cap) - min(target_absolute / absolute_scale, absolute_cap)
         ) ** 2
         volume_component = (
-            min(volume / volume_scale, volume_cap)
-            - min(target_volume / volume_scale, volume_cap)
+            min(volume / volume_scale, volume_cap) - min(target_volume / volume_scale, volume_cap)
         ) ** 2
         rows.append(
             f"{index}. **{ticker} ({session_date})** — distance {distance:.4f}; "
@@ -239,9 +226,7 @@ def _correct_analogue_contract_prose(value: str, run: EvidenceRun) -> str:
             re.I,
         )
         cleaned = "".join(
-            sentence
-            for sentence in _contract_sentences(cleaned)
-            if direction_marker.search(sentence) is None
+            sentence for sentence in _contract_sentences(cleaned) if direction_marker.search(sentence) is None
         ).strip()
         count = int(direction.get("candidate_count", 0) or 0)
         canonical.append(
@@ -263,9 +248,7 @@ def _correct_analogue_contract_prose(value: str, run: EvidenceRun) -> str:
     contract = data.get("feature_contract")
     ranked = contract.get("ranked_features") if isinstance(contract, Mapping) else None
     if isinstance(ranked, list):
-        specs = {
-            str(item.get("name")): item for item in ranked if isinstance(item, Mapping)
-        }
+        specs = {str(item.get("name")): item for item in ranked if isinstance(item, Mapping)}
         absolute = specs.get("absolute_return_pct")
         volume = specs.get("volume_ratio")
         if absolute and volume:
@@ -308,9 +291,7 @@ def _correct_analogue_contract_prose(value: str, run: EvidenceRun) -> str:
     return corrected
 
 
-def _correct_analogue_contract_uncertainty(
-    values: tuple[str, ...], run: EvidenceRun
-) -> tuple[str, ...]:
+def _correct_analogue_contract_uncertainty(values: tuple[str, ...], run: EvidenceRun) -> tuple[str, ...]:
     """Replace model metric uncertainty with evidence-derived analogue limits."""
     data = _analogue_contract_data(run)
     if data is None:
@@ -325,16 +306,11 @@ def _correct_analogue_contract_uncertainty(
             if not isinstance(items, (list, tuple)):
                 continue
             warning_text.extend(
-                str(item.get("message", "")) if isinstance(item, Mapping) else str(item)
-                for item in items
+                str(item.get("message", "")) if isinstance(item, Mapping) else str(item) for item in items
             )
-    if any(
-        re.search(r"(?:reconstruct|historical[- ]vintage)", item, re.I)
-        for item in warning_text
-    ):
+    if any(re.search(r"(?:reconstruct|historical[- ]vintage)", item, re.I) for item in warning_text):
         canonical.append(
-            "Historical market inputs are current-capture reconstructions, not "
-            "historical-vintage evidence."
+            "Historical market inputs are current-capture reconstructions, not historical-vintage evidence."
         )
     direction = data.get("direction_summary")
     if (

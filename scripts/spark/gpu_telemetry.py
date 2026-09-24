@@ -6,7 +6,8 @@ import csv
 import io
 import re
 import subprocess
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 
 SUPPORTED_GPU = "NVIDIA GB10"
@@ -102,11 +103,6 @@ def valid_gpu_telemetry(value: Mapping[str, Any]) -> bool:
         return False
     memory = value.get("gpu_memory_used_mib")
     observation = value.get("gpu_memory_used_status")
-    return (
-        observation == MEMORY_REPORTED
-        and type(memory) is int
-        and memory >= 0
-    ) or (
-        observation == MEMORY_UNIFIED_NOT_EXPOSED
-        and memory is None
+    return (observation == MEMORY_REPORTED and type(memory) is int and memory >= 0) or (
+        observation == MEMORY_UNIFIED_NOT_EXPOSED and memory is None
     )

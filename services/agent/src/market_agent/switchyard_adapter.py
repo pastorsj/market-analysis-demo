@@ -200,9 +200,7 @@ class EscalationAlgorithmAdapter:
                     tier = self._tier(selected)
                     response = outcome.response
                     if response is None:
-                        response = LlmResponse.Agg(
-                            await self._call(selected, tier, outcome.request)
-                        )
+                        response = LlmResponse.Agg(await self._call(selected, tier, outcome.request))
                     metadata = outcome.metadata
                     decision: dict[str, object] = {
                         "algorithm": metadata.algorithm if metadata else "llm_classifier",

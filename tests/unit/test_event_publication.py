@@ -74,71 +74,82 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
         "calendar": "XNYS",
         "timezone": "America/New_York",
         "binding": binding,
-        "categories": [{
-            "category_id": "test-category",
-            "label": "Test category",
-            "description": "A complete category used by publication contract tests.",
-            "sort_order": 1,
-        }],
-        "events": [{
-            "event_id": "test-event",
-            "category_id": "test-category",
-            "title": "Complete test event",
-            "summary": "A complete prepared event used to exercise publication semantics.",
-            "sort_order": 1,
-            "event_session": "2026-01-02",
-            "source_dates": ["2026-01-02"],
-            "primary_ticker": "NVDA",
-            "analysis_tickers": ["NVDA"],
-            "context_instruments": ["SPY"],
-            "start_session": "2026-01-02",
-            "end_session": "2026-01-02",
-            "default_cutoff": "2026-01-02T20:00:00Z",
-            "questions": [
-                {
-                    "question_id": f"test-question-{number}",
-                    "label": f"Test question {number}",
-                    "capability": capability,
-                    "text": f"What does complete test question {number} establish about this event?",
-                }
-                for number, capability in enumerate((
-                    "move-measurement", "evidence-review", "peer-comparison",
-                ), start=1)
-            ],
-            "source_requirements": {
-                "market": {
-                    "required": True,
-                    "required_fields": ["adjusted_close", "volume"],
-                    "price_basis": "provider_adjusted",
+        "categories": [
+            {
+                "category_id": "test-category",
+                "label": "Test category",
+                "description": "A complete category used by publication contract tests.",
+                "sort_order": 1,
+            }
+        ],
+        "events": [
+            {
+                "event_id": "test-event",
+                "category_id": "test-category",
+                "title": "Complete test event",
+                "summary": "A complete prepared event used to exercise publication semantics.",
+                "sort_order": 1,
+                "event_session": "2026-01-02",
+                "source_dates": ["2026-01-02"],
+                "primary_ticker": "NVDA",
+                "analysis_tickers": ["NVDA"],
+                "context_instruments": ["SPY"],
+                "start_session": "2026-01-02",
+                "end_session": "2026-01-02",
+                "default_cutoff": "2026-01-02T20:00:00Z",
+                "questions": [
+                    {
+                        "question_id": f"test-question-{number}",
+                        "label": f"Test question {number}",
+                        "capability": capability,
+                        "text": f"What does complete test question {number} establish about this event?",
+                    }
+                    for number, capability in enumerate(
+                        (
+                            "move-measurement",
+                            "evidence-review",
+                            "peer-comparison",
+                        ),
+                        start=1,
+                    )
+                ],
+                "source_requirements": {
+                    "market": {
+                        "required": True,
+                        "required_fields": ["adjusted_close", "volume"],
+                        "price_basis": "provider_adjusted",
+                    },
+                    "documents": {
+                        "required_for_ready": True,
+                        "requirement_id": "test-documents",
+                        "source_kinds": ["company_release"],
+                    },
+                    "licensed_news": {
+                        "required_for_publication": False,
+                        "required_for_ready": True,
+                        "source_kind": "licensed_news_metadata",
+                    },
+                    "derived_features": {
+                        "required_for_ready": True,
+                        "features": ["event-returns"],
+                    },
                 },
-                "documents": {
-                    "required_for_ready": True,
-                    "requirement_id": "test-documents",
-                    "source_kinds": ["company_release"],
+                "limitations": [
+                    {
+                        "limitation_id": "test-limitation",
+                        "detail": "This is synthetic publication-contract test data only.",
+                    }
+                ],
+                "qualification": {
+                    "status": "ready",
+                    "market": {"status": "ready", "gaps": []},
+                    "documents": {"status": "ready", "gaps": []},
+                    "licensed_news": {"status": "ready", "gaps": []},
+                    "derived_features": {"status": "ready", "gaps": []},
+                    "gaps": [],
                 },
-                "licensed_news": {
-                    "required_for_publication": False,
-                    "required_for_ready": True,
-                    "source_kind": "licensed_news_metadata",
-                },
-                "derived_features": {
-                    "required_for_ready": True,
-                    "features": ["event-returns"],
-                },
-            },
-            "limitations": [{
-                "limitation_id": "test-limitation",
-                "detail": "This is synthetic publication-contract test data only.",
-            }],
-            "qualification": {
-                "status": "ready",
-                "market": {"status": "ready", "gaps": []},
-                "documents": {"status": "ready", "gaps": []},
-                "licensed_news": {"status": "ready", "gaps": []},
-                "derived_features": {"status": "ready", "gaps": []},
-                "gaps": [],
-            },
-        }],
+            }
+        ],
         "excluded_events": [],
         "summary": summary,
     }
@@ -153,13 +164,15 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
         "schema_sha256": schema_sha,
         "binding": binding,
         "summary": summary,
-        "artifacts": [{
-            "path": "catalog.json",
-            "sha256": payload_sha,
-            "bytes": len(payload_body),
-            "records": 1,
-            "media_type": "application/json",
-        }],
+        "artifacts": [
+            {
+                "path": "catalog.json",
+                "sha256": payload_sha,
+                "bytes": len(payload_body),
+                "records": 1,
+                "media_type": "application/json",
+            }
+        ],
     }
     _write(artifact / "manifest.json", _canonical(manifest) + b"\n")
     return {
@@ -174,7 +187,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
 
 
 def _rewrite_artifact(
-    fixture: dict[str, Path | str], mutate,
+    fixture: dict[str, Path | str],
+    mutate,
 ) -> None:
     artifact = Path(fixture["artifact"])
     payload_path = artifact / "catalog.json"
@@ -185,19 +199,24 @@ def _rewrite_artifact(
     payload_sha = _write(payload_path, payload_body)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["summary"] = payload["summary"]
-    manifest["artifacts"][0].update({
-        "sha256": payload_sha,
-        "bytes": len(payload_body),
-        "records": len(payload["events"]),
-    })
+    manifest["artifacts"][0].update(
+        {
+            "sha256": payload_sha,
+            "bytes": len(payload_body),
+            "records": len(payload["events"]),
+        }
+    )
     _write(manifest_path, _canonical(manifest) + b"\n")
 
 
 def test_verifies_source_scenario_and_artifact_then_atomically_binds_current(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     receipt = publish(
-        fixture["scenario"], fixture["artifact"], fixture["events_root"],
-        fixture["catalog"], fixture["schema"],
+        fixture["scenario"],
+        fixture["artifact"],
+        fixture["events_root"],
+        fixture["catalog"],
+        fixture["schema"],
     )
 
     current = fixture["events_root"] / "current"
@@ -210,7 +229,10 @@ def test_verifies_source_scenario_and_artifact_then_atomically_binds_current(tmp
     assert not list(Path(fixture["events_root"]).glob(".current.next.*"))
 
     verified = verify_binding(
-        fixture["scenario"], current, fixture["catalog"], fixture["schema"],
+        fixture["scenario"],
+        current,
+        fixture["catalog"],
+        fixture["schema"],
     )
     assert verified == {key: receipt[key] for key in verified}
 
@@ -229,7 +251,10 @@ def test_binding_fails_closed_on_every_digest_boundary(tmp_path: Path, mutation:
 
     with pytest.raises(EventPublicationError, match="event_"):
         verify_binding(
-            fixture["scenario"], fixture["artifact"], fixture["catalog"], fixture["schema"],
+            fixture["scenario"],
+            fixture["artifact"],
+            fixture["catalog"],
+            fixture["schema"],
         )
 
 
@@ -240,22 +265,28 @@ def test_binding_fails_closed_on_every_digest_boundary(tmp_path: Path, mutation:
         (lambda payload: payload["events"][0].pop("title"), "event_contract"),
         (
             lambda payload: payload["summary"].update(
-                ready_events=0, partial_events=1,
+                ready_events=0,
+                partial_events=1,
             ),
             "event_summary",
         ),
     ],
 )
 def test_publication_rejects_runtime_invalid_prepared_catalogs(
-    tmp_path: Path, mutate, code: str,
+    tmp_path: Path,
+    mutate,
+    code: str,
 ) -> None:
     fixture = _fixture(tmp_path)
     _rewrite_artifact(fixture, mutate)
 
     with pytest.raises(EventPublicationError, match=code):
         publish(
-            fixture["scenario"], fixture["artifact"], fixture["events_root"],
-            fixture["catalog"], fixture["schema"],
+            fixture["scenario"],
+            fixture["artifact"],
+            fixture["events_root"],
+            fixture["catalog"],
+            fixture["schema"],
         )
     current = Path(fixture["events_root"]) / "current"
     assert not current.exists() and not current.is_symlink()
@@ -264,8 +295,11 @@ def test_publication_rejects_runtime_invalid_prepared_catalogs(
 def test_restore_is_compare_and_swap_and_never_overwrites_drift(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     receipt = publish(
-        fixture["scenario"], fixture["artifact"], fixture["events_root"],
-        fixture["catalog"], fixture["schema"],
+        fixture["scenario"],
+        fixture["artifact"],
+        fixture["events_root"],
+        fixture["catalog"],
+        fixture["schema"],
     )
     current = fixture["events_root"] / "current"
     with pytest.raises(EventPublicationError, match="event_current_alias_drift"):
@@ -283,7 +317,10 @@ def test_publication_rejects_non_symlink_current_without_replacing_it(tmp_path: 
 
     with pytest.raises(EventPublicationError, match="event_current_alias"):
         publish(
-            fixture["scenario"], fixture["artifact"], fixture["events_root"],
-            fixture["catalog"], fixture["schema"],
+            fixture["scenario"],
+            fixture["artifact"],
+            fixture["events_root"],
+            fixture["catalog"],
+            fixture["schema"],
         )
     assert current.is_dir() and not current.is_symlink()

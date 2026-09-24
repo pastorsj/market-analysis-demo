@@ -4,30 +4,44 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time, timezone
+from datetime import datetime, time, UTC
 import json
 import os
 from pathlib import Path
 import re
 import stat
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
 from scripts.data.market_contract import (
-    ContractIssue, MarketContractError, content_id, parse_date, parse_utc, sha256_bytes,
+    ContractIssue,
+    MarketContractError,
+    content_id,
+    parse_date,
+    parse_utc,
+    sha256_bytes,
 )
 
 
 SOURCE_KINDS = frozenset({"filing", "company_release", "primary_source", "licensed_news_metadata"})
 VINTAGES = frozenset({"archived_at_cutoff", "reconstructed_later", "unknown"})
 SEC_HOSTS = frozenset({"data.sec.gov", "www.sec.gov"})
-MIGRATION_KEYS = frozenset({
-    "mode", "source_capture_id", "source_manifest_sha256", "publication_receipt_sha256",
-    "scenario_id", "scenario_manifest_sha256", "document_snapshot_id", "document_manifest_sha256",
-})
+MIGRATION_KEYS = frozenset(
+    {
+        "mode",
+        "source_capture_id",
+        "source_manifest_sha256",
+        "publication_receipt_sha256",
+        "scenario_id",
+        "scenario_manifest_sha256",
+        "document_snapshot_id",
+        "document_manifest_sha256",
+    }
+)
 DOC_CAPTURE_ID = re.compile(r"^doccapture-[0-9a-f]{16}$")
 SCENARIO_ID = re.compile(r"^market-shock-v2-[0-9a-f]{16}$")
 DOCUMENT_SNAPSHOT_ID = re.compile(r"^documents-[0-9a-f]{16}$")
@@ -96,15 +110,21 @@ def read_regular_bytes(path: Path, *, root: Path | None = None) -> bytes:
     finally:
         os.close(descriptor)
     stable_fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")
-    if any(getattr(before, field) != getattr(after, field) for field in stable_fields) or len(body) != before.st_size:
+    if (
+        any(getattr(before, field) != getattr(after, field) for field in stable_fields)
+        or len(body) != before.st_size
+    ):
         raise DocumentFileError("file changed while it was read")
     try:
         current = os.lstat(path)
     except OSError as exc:
         raise DocumentFileError("file path changed after it was read") from exc
     if (
-        stat.S_ISLNK(current.st_mode) or not stat.S_ISREG(current.st_mode)
-        or current.st_nlink != 1 or current.st_dev != before.st_dev or current.st_ino != before.st_ino
+        stat.S_ISLNK(current.st_mode)
+        or not stat.S_ISREG(current.st_mode)
+        or current.st_nlink != 1
+        or current.st_dev != before.st_dev
+        or current.st_ino != before.st_ino
     ):
         raise DocumentFileError("file path changed after it was read")
     return body
@@ -114,6 +134,7 @@ def read_regular_tree(root: Path) -> dict[str, bytes]:
     """Capture an exact, stable byte inventory for a plain directory tree."""
     root = _absolute_without_resolving(root)
     _require_plain_directories(root, root)
+
     def walk_error(error: OSError) -> None:
         raise DocumentFileError("tree cannot be enumerated") from error
 
@@ -169,7 +190,8 @@ class DocumentContractError(ValueError):
 
 def _strings(value: Any, *, minimum: int = 0) -> bool:
     return (
-        isinstance(value, list) and len(value) >= minimum
+        isinstance(value, list)
+        and len(value) >= minimum
         and all(isinstance(item, str) and bool(item) for item in value)
     )
 
@@ -181,12 +203,20 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
     except (UnicodeError, yaml.YAMLError) as exc:
         raise DocumentContractError([DocumentIssue("corpus_contract", "YAML")]) from exc
     allowed_top = {
-        "version", "issuers", "sec", "q4_feed", "company_releases",
-        "requirements", "licensed_news", "public_authorities",
+        "version",
+        "issuers",
+        "sec",
+        "q4_feed",
+        "company_releases",
+        "requirements",
+        "licensed_news",
+        "public_authorities",
     }
     if (
-        not isinstance(corpus, dict) or not {"version", "issuers", "requirements"} <= set(corpus)
-        or not set(corpus) <= allowed_top or type(corpus.get("version")) is not int
+        not isinstance(corpus, dict)
+        or not {"version", "issuers", "requirements"} <= set(corpus)
+        or not set(corpus) <= allowed_top
+        or type(corpus.get("version")) is not int
         or corpus["version"] != 1
     ):
         raise DocumentContractError([DocumentIssue("corpus_contract", "root")])
@@ -195,8 +225,10 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
         raise DocumentContractError([DocumentIssue("corpus_contract", "issuers")])
     for issuer_id, issuer in issuers.items():
         if (
-            not isinstance(issuer, dict) or set(issuer) != {"cik", "official_hosts"}
-            or not isinstance(issuer.get("cik"), str) or re.fullmatch(r"[0-9]{10}", issuer["cik"]) is None
+            not isinstance(issuer, dict)
+            or set(issuer) != {"cik", "official_hosts"}
+            or not isinstance(issuer.get("cik"), str)
+            or re.fullmatch(r"[0-9]{10}", issuer["cik"]) is None
             or not _strings(issuer.get("official_hosts"), minimum=1)
             or any("/" in host or ":" in host for host in issuer["official_hosts"])
         ):
@@ -206,8 +238,10 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
         raise DocumentContractError([DocumentIssue("corpus_contract", "public_authorities")])
     for authority_id, authority in authorities.items():
         if (
-            not isinstance(authority_id, str) or re.fullmatch(r"[A-Z][A-Z0-9_-]{1,31}", authority_id) is None
-            or not isinstance(authority, dict) or set(authority) != {"official_hosts"}
+            not isinstance(authority_id, str)
+            or re.fullmatch(r"[A-Z][A-Z0-9_-]{1,31}", authority_id) is None
+            or not isinstance(authority, dict)
+            or set(authority) != {"official_hosts"}
             or not _strings(authority.get("official_hosts"), minimum=1)
             or any("/" in host or ":" in host for host in authority["official_hosts"])
         ):
@@ -215,11 +249,16 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
     sec = corpus.get("sec")
     if sec is not None:
         expected = {
-            "submissions_url_template", "submissions_archive_url_template", "archive_url_template",
-            "forms", "start", "end_exclusive",
+            "submissions_url_template",
+            "submissions_archive_url_template",
+            "archive_url_template",
+            "forms",
+            "start",
+            "end_exclusive",
         }
         if (
-            not isinstance(sec, dict) or set(sec) != expected
+            not isinstance(sec, dict)
+            or set(sec) != expected
             or not all(isinstance(sec.get(key), str) and sec[key] for key in expected - {"forms"})
             or not _strings(sec.get("forms"), minimum=1)
         ):
@@ -233,7 +272,9 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
     if q4 is not None and (
         not isinstance(q4, dict)
         or set(q4) != {"url", "public_api_key", "language_id", "category_id"}
-        or not all(isinstance(q4.get(key), str) and q4[key] for key in ("url", "public_api_key", "category_id"))
+        or not all(
+            isinstance(q4.get(key), str) and q4[key] for key in ("url", "public_api_key", "category_id")
+        )
         or type(q4.get("language_id")) is not int
     ):
         raise DocumentContractError([DocumentIssue("corpus_contract", "q4_feed")])
@@ -241,14 +282,25 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
     if not isinstance(releases, list):
         raise DocumentContractError([DocumentIssue("corpus_contract", "company_releases")])
     release_required = {
-        "source_id", "issuer_id", "event_id", "canonical_url", "title", "publication_proof",
-        "summary", "license_id", "redistribution",
+        "source_id",
+        "issuer_id",
+        "event_id",
+        "canonical_url",
+        "title",
+        "publication_proof",
+        "summary",
+        "license_id",
+        "redistribution",
     }
     for index, release in enumerate(releases):
         if (
-            not isinstance(release, dict) or not release_required <= set(release)
+            not isinstance(release, dict)
+            or not release_required <= set(release)
             or not set(release) <= release_required | {"source_kind", "source_authority_id"}
-            or not all(isinstance(release.get(key), str) and release[key] for key in release_required - {"publication_proof"})
+            or not all(
+                isinstance(release.get(key), str) and release[key]
+                for key in release_required - {"publication_proof"}
+            )
             or release.get("issuer_id") not in issuers
             or ("source_kind" in release and not isinstance(release["source_kind"], str))
         ):
@@ -257,10 +309,14 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
         if authority_id is not None:
             parsed = urlparse(release["canonical_url"])
             if (
-                not isinstance(authority_id, str) or authority_id not in authorities
+                not isinstance(authority_id, str)
+                or authority_id not in authorities
                 or release.get("source_kind") != "primary_source"
-                or parsed.scheme != "https" or parsed.hostname not in authorities[authority_id]["official_hosts"]
-                or parsed.username or parsed.password or parsed.fragment
+                or parsed.scheme != "https"
+                or parsed.hostname not in authorities[authority_id]["official_hosts"]
+                or parsed.username
+                or parsed.password
+                or parsed.fragment
             ):
                 raise DocumentContractError([DocumentIssue("corpus_contract", f"authority_release:{index}")])
         proof = release.get("publication_proof")
@@ -271,11 +327,22 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
             "official_body_date": {"kind", "date", "body_markers"},
             "sec_submission_acceptance": {"kind", "accession", "document", "document_role", "body_markers"},
             "q4_press_release_feed": {
-                "kind", "year", "press_release_id", "revision_number", "workflow_id",
-                "timezone", "headline", "link_path", "body_markers",
+                "kind",
+                "year",
+                "press_release_id",
+                "revision_number",
+                "workflow_id",
+                "timezone",
+                "headline",
+                "link_path",
+                "body_markers",
             },
         }
-        if kind not in shapes or set(proof) != shapes[kind] or not _strings(proof.get("body_markers"), minimum=2):
+        if (
+            kind not in shapes
+            or set(proof) != shapes[kind]
+            or not _strings(proof.get("body_markers"), minimum=2)
+        ):
             raise DocumentContractError([DocumentIssue("corpus_contract", f"proof:{index}")])
         if kind == "official_body_date":
             if not isinstance(proof.get("date"), str):
@@ -286,17 +353,26 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
                 raise DocumentContractError([DocumentIssue("corpus_contract", f"proof:{index}")]) from exc
         elif kind == "sec_submission_acceptance":
             if (
-                not isinstance(proof.get("accession"), str) or SEC_ACCESSION.fullmatch(proof["accession"]) is None
-                or not isinstance(proof.get("document"), str) or not proof["document"]
+                not isinstance(proof.get("accession"), str)
+                or SEC_ACCESSION.fullmatch(proof["accession"]) is None
+                or not isinstance(proof.get("document"), str)
+                or not proof["document"]
                 or proof.get("document_role") not in {"primary", "accession_document"}
             ):
                 raise DocumentContractError([DocumentIssue("corpus_contract", f"proof:{index}")])
         elif (
-            type(proof.get("year")) is not int or type(proof.get("press_release_id")) is not int
+            type(proof.get("year")) is not int
+            or type(proof.get("press_release_id")) is not int
             or type(proof.get("revision_number")) is not int
-            or not all(isinstance(proof.get(key), str) and proof[key] for key in (
-                "workflow_id", "timezone", "headline", "link_path",
-            ))
+            or not all(
+                isinstance(proof.get(key), str) and proof[key]
+                for key in (
+                    "workflow_id",
+                    "timezone",
+                    "headline",
+                    "link_path",
+                )
+            )
         ):
             raise DocumentContractError([DocumentIssue("corpus_contract", f"proof:{index}")])
     requirements = corpus.get("requirements")
@@ -305,9 +381,13 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
     required_requirement = {"requirement_id", "issuer_id", "event_id", "source_kinds", "cutoff"}
     for index, requirement in enumerate(requirements):
         if (
-            not isinstance(requirement, dict) or not required_requirement <= set(requirement)
+            not isinstance(requirement, dict)
+            or not required_requirement <= set(requirement)
             or not set(requirement) <= required_requirement | {"filing_summary"}
-            or not all(isinstance(requirement.get(key), str) and requirement[key] for key in required_requirement - {"source_kinds"})
+            or not all(
+                isinstance(requirement.get(key), str) and requirement[key]
+                for key in required_requirement - {"source_kinds"}
+            )
             or requirement.get("issuer_id") not in issuers
             or not _strings(requirement.get("source_kinds"), minimum=1)
             or ("filing_summary" in requirement and not isinstance(requirement["filing_summary"], str))
@@ -319,9 +399,11 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
             raise DocumentContractError([DocumentIssue("corpus_contract", f"requirement:{index}")]) from exc
     licensed = corpus.get("licensed_news")
     if licensed is not None and (
-        not isinstance(licensed, dict) or set(licensed) != {"required_for_release", "absent_gap", "mapping"}
+        not isinstance(licensed, dict)
+        or set(licensed) != {"required_for_release", "absent_gap", "mapping"}
         or type(licensed.get("required_for_release")) is not bool
-        or not isinstance(licensed.get("absent_gap"), str) or not isinstance(licensed.get("mapping"), str)
+        or not isinstance(licensed.get("absent_gap"), str)
+        or not isinstance(licensed.get("mapping"), str)
     ):
         raise DocumentContractError([DocumentIssue("corpus_contract", "licensed_news")])
     return corpus
@@ -329,7 +411,8 @@ def parse_document_corpus(body: bytes) -> dict[str, Any]:
 
 def valid_document_migration(value: Any) -> bool:
     return (
-        isinstance(value, dict) and set(value) == MIGRATION_KEYS
+        isinstance(value, dict)
+        and set(value) == MIGRATION_KEYS
         and value.get("mode") == "verified_published_v5_migration"
         and isinstance(value.get("source_capture_id"), str)
         and DOC_CAPTURE_ID.fullmatch(value["source_capture_id"]) is not None
@@ -340,8 +423,10 @@ def valid_document_migration(value: Any) -> bool:
         and all(
             isinstance(value.get(key), str) and SHA256.fullmatch(value[key]) is not None
             for key in (
-                "source_manifest_sha256", "publication_receipt_sha256",
-                "scenario_manifest_sha256", "document_manifest_sha256",
+                "source_manifest_sha256",
+                "publication_receipt_sha256",
+                "scenario_manifest_sha256",
+                "document_manifest_sha256",
             )
         )
     )
@@ -365,8 +450,11 @@ def _authority_host(url: str, identity: dict[str, Any]) -> bool:
         isinstance(authority_id, str)
         and re.fullmatch(r"[A-Z][A-Z0-9_-]{1,31}", authority_id) is not None
         and _strings(hosts, minimum=1)
-        and parsed.scheme == "https" and parsed.hostname in hosts
-        and not parsed.username and not parsed.password and not parsed.fragment
+        and parsed.scheme == "https"
+        and parsed.hostname in hosts
+        and not parsed.username
+        and not parsed.password
+        and not parsed.fragment
     )
 
 
@@ -377,7 +465,9 @@ def _proof_identity(row: dict[str, Any]) -> dict[str, Any]:
     try:
         identity = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise DocumentContractError([DocumentIssue("publication_proof_shape", str(row.get("evidence_id")))]) from exc
+        raise DocumentContractError(
+            [DocumentIssue("publication_proof_shape", str(row.get("evidence_id")))]
+        ) from exc
     if not isinstance(identity, dict):
         raise DocumentContractError([DocumentIssue("publication_proof_shape", str(row.get("evidence_id")))])
     return identity
@@ -385,7 +475,9 @@ def _proof_identity(row: dict[str, Any]) -> dict[str, Any]:
 
 def _body_has_markers(body: bytes | None, markers: Any) -> bool:
     if (
-        body is None or not isinstance(markers, list) or len(markers) < 2
+        body is None
+        or not isinstance(markers, list)
+        or len(markers) < 2
         or any(not isinstance(marker, str) or not marker.strip() for marker in markers)
     ):
         return False
@@ -413,19 +505,23 @@ def _sec_accepted_at(value: Any) -> str:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
                 raise ValueError
-            parsed = parsed.astimezone(timezone.utc)
+            parsed = parsed.astimezone(UTC)
         else:
             # Legacy SEC submissions archives use compact UTC acceptance timestamps.
-            parsed = datetime.strptime(value[:14], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+            parsed = datetime.strptime(value[:14], "%Y%m%d%H%M%S").replace(tzinfo=UTC)
     except ValueError as exc:
         raise DocumentContractError([DocumentIssue("publication_proof_identity", "SEC acceptance")]) from exc
     return parsed.isoformat().replace("+00:00", "Z")
 
 
 def validate_publication_proof(
-    row: dict[str, Any], proof_bytes: bytes, source_bytes: bytes | None = None,
-    index_bytes: bytes | None = None, issuer_bytes: bytes | None = None,
-    *, enforce_declared: bool = True,
+    row: dict[str, Any],
+    proof_bytes: bytes,
+    source_bytes: bytes | None = None,
+    index_bytes: bytes | None = None,
+    issuer_bytes: bytes | None = None,
+    *,
+    enforce_declared: bool = True,
 ) -> str:
     """Derive publication time and identity from immutable third-party bytes.
 
@@ -441,13 +537,22 @@ def validate_publication_proof(
     expected_precision: str
     if kind == "sec_submission_acceptance":
         expected_keys = {
-            "accession", "document", "document_role", "issuer_name", "submission_file", "body_markers",
+            "accession",
+            "document",
+            "document_role",
+            "issuer_name",
+            "submission_file",
+            "body_markers",
         }
         accession, document = identity.get("accession"), identity.get("document")
         if (
-            set(identity) != expected_keys or not isinstance(accession, str)
-            or SEC_ACCESSION.fullmatch(accession) is None or not isinstance(document, str)
-            or not document or "/" in document or ".." in document
+            set(identity) != expected_keys
+            or not isinstance(accession, str)
+            or SEC_ACCESSION.fullmatch(accession) is None
+            or not isinstance(document, str)
+            or not document
+            or "/" in document
+            or ".." in document
             or identity.get("document_role") not in {"primary", "accession_document"}
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_shape", evidence_id)])
@@ -464,12 +569,16 @@ def validate_publication_proof(
         try:
             issuer_payload = json.loads(issuer_bytes) if issuer_bytes is not None else {}
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise DocumentContractError([DocumentIssue("publication_proof_issuer_identity", evidence_id)]) from exc
+            raise DocumentContractError(
+                [DocumentIssue("publication_proof_issuer_identity", evidence_id)]
+            ) from exc
         payload_cik = issuer_payload.get("cik")
         payload_name = issuer_payload.get("name")
         if (
-            isinstance(payload_cik, bool) or not isinstance(payload_cik, (str, int))
-            or str(payload_cik).zfill(10) != expected_cik or not isinstance(payload_name, str)
+            isinstance(payload_cik, bool)
+            or not isinstance(payload_cik, (str, int))
+            or str(payload_cik).zfill(10) != expected_cik
+            or not isinstance(payload_name, str)
             or payload_name != identity.get("issuer_name")
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_issuer_identity", evidence_id)])
@@ -481,13 +590,15 @@ def validate_publication_proof(
             raise DocumentContractError([DocumentIssue("publication_proof_shape", evidence_id)])
         else:
             files = issuer_payload.get("filings", {}).get("files", [])
-            if not isinstance(files, list) or sum(
-                isinstance(item, dict) and item.get("name") == submission_file for item in files
-            ) != 1:
+            if (
+                not isinstance(files, list)
+                or sum(isinstance(item, dict) and item.get("name") == submission_file for item in files) != 1
+            ):
                 raise DocumentContractError([DocumentIssue("publication_proof_issuer_identity", evidence_id)])
         proof_cik = payload.get("cik")
         if proof_cik is not None and (
-            isinstance(proof_cik, bool) or not isinstance(proof_cik, (str, int))
+            isinstance(proof_cik, bool)
+            or not isinstance(proof_cik, (str, int))
             or str(proof_cik).zfill(10) != expected_cik
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
@@ -497,8 +608,13 @@ def validate_publication_proof(
         except (TypeError, ValueError) as exc:
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)]) from exc
         expected_path = f"/Archives/edgar/data/{cik_int}/{compact}/{document}"
-        if parsed_url.scheme != "https" or parsed_url.hostname != "www.sec.gov" or parsed_url.path != expected_path \
-                or parsed_url.query or parsed_url.fragment:
+        if (
+            parsed_url.scheme != "https"
+            or parsed_url.hostname != "www.sec.gov"
+            or parsed_url.path != expected_path
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
         markers = identity["body_markers"]
         primary = recent["primaryDocument"][index]
@@ -516,38 +632,57 @@ def validate_publication_proof(
                 directory = filing_index["directory"]
                 items = directory["item"]
             except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-                raise DocumentContractError([DocumentIssue("publication_proof_index_identity", evidence_id)]) from exc
+                raise DocumentContractError(
+                    [DocumentIssue("publication_proof_index_identity", evidence_id)]
+                ) from exc
             expected_parent = f"/Archives/edgar/data/{cik_int}"
             expected_directory = f"{expected_parent}/{compact}"
-            typed_items = (
-                isinstance(items, list) and all(
-                    isinstance(item, dict) and set(item) == {"last-modified", "name", "type", "size"}
-                    and all(isinstance(item.get(key), str) for key in item)
-                    for item in items
-                )
+            typed_items = isinstance(items, list) and all(
+                isinstance(item, dict)
+                and set(item) == {"last-modified", "name", "type", "size"}
+                and all(isinstance(item.get(key), str) for key in item)
+                for item in items
             )
             if (
-                not isinstance(filing_index, dict) or set(filing_index) != {"directory"}
-                or not isinstance(directory, dict) or set(directory) != {"item", "name", "parent-dir"}
-                or directory.get("name") != expected_directory or directory.get("parent-dir") != expected_parent
-                or not typed_items or sum(item["name"] == document for item in items) != 1
+                not isinstance(filing_index, dict)
+                or set(filing_index) != {"directory"}
+                or not isinstance(directory, dict)
+                or set(directory) != {"item", "name", "parent-dir"}
+                or directory.get("name") != expected_directory
+                or directory.get("parent-dir") != expected_parent
+                or not typed_items
+                or sum(item["name"] == document for item in items) != 1
             ):
                 raise DocumentContractError([DocumentIssue("publication_proof_index_identity", evidence_id)])
         derived = _sec_accepted_at(recent["acceptanceDateTime"][index])
         expected_precision = "second"
     elif kind == "q4_press_release_feed":
         expected_keys = {
-            "feed_url", "year", "press_release_id", "revision_number", "workflow_id", "timezone",
-            "headline", "link_path", "body_markers",
+            "feed_url",
+            "year",
+            "press_release_id",
+            "revision_number",
+            "workflow_id",
+            "timezone",
+            "headline",
+            "link_path",
+            "body_markers",
         }
-        if set(identity) != expected_keys or type(identity.get("year")) is not int \
-                or type(identity.get("press_release_id")) is not int \
-                or type(identity.get("revision_number")) is not int:
+        if (
+            set(identity) != expected_keys
+            or type(identity.get("year")) is not int
+            or type(identity.get("press_release_id")) is not int
+            or type(identity.get("revision_number")) is not int
+        ):
             raise DocumentContractError([DocumentIssue("publication_proof_shape", evidence_id)])
         if (
-            identity.get("feed_url") != "https://pressroom.aboutschwab.com/feed/PressRelease.svc/GetPressReleaseList"
+            identity.get("feed_url")
+            != "https://pressroom.aboutschwab.com/feed/PressRelease.svc/GetPressReleaseList"
             or identity.get("timezone") != "America/New_York"
-            or not all(isinstance(identity.get(key), str) and identity[key] for key in ("workflow_id", "headline", "link_path"))
+            or not all(
+                isinstance(identity.get(key), str) and identity[key]
+                for key in ("workflow_id", "headline", "link_path")
+            )
             or f"/press-release/{identity.get('year')}/" not in str(identity.get("link_path"))
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_shape", evidence_id)])
@@ -559,11 +694,16 @@ def validate_publication_proof(
         if not isinstance(values, list):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
         required_item = {
-            "PressReleaseId": int, "RevisionNumber": int, "WorkflowId": str,
-            "Headline": str, "LinkToDetailPage": str, "PressReleaseDate": str,
+            "PressReleaseId": int,
+            "RevisionNumber": int,
+            "WorkflowId": str,
+            "Headline": str,
+            "LinkToDetailPage": str,
+            "PressReleaseDate": str,
         }
         if any(
-            not isinstance(item, dict) or any(type(item.get(key)) is not expected for key, expected in required_item.items())
+            not isinstance(item, dict)
+            or any(type(item.get(key)) is not expected for key, expected in required_item.items())
             for item in values
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
@@ -571,13 +711,23 @@ def validate_publication_proof(
         if len(matches) != 1:
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
         item = matches[0]
-        if any(item.get(source) != identity[target] for source, target in (
-            ("RevisionNumber", "revision_number"), ("WorkflowId", "workflow_id"),
-            ("Headline", "headline"), ("LinkToDetailPage", "link_path"),
-        )):
+        if any(
+            item.get(source) != identity[target]
+            for source, target in (
+                ("RevisionNumber", "revision_number"),
+                ("WorkflowId", "workflow_id"),
+                ("Headline", "headline"),
+                ("LinkToDetailPage", "link_path"),
+            )
+        ):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
-        if parsed_url.scheme != "https" or parsed_url.hostname != "pressroom.aboutschwab.com" \
-                or parsed_url.path.rstrip("/") != identity["link_path"].rstrip("/") or parsed_url.query or parsed_url.fragment:
+        if (
+            parsed_url.scheme != "https"
+            or parsed_url.hostname != "pressroom.aboutschwab.com"
+            or parsed_url.path.rstrip("/") != identity["link_path"].rstrip("/")
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)])
         if not _body_has_markers(source_bytes, identity["body_markers"]):
             raise DocumentContractError([DocumentIssue("publication_proof_source_identity", evidence_id)])
@@ -585,7 +735,12 @@ def validate_publication_proof(
             local = datetime.strptime(item["PressReleaseDate"], "%m/%d/%Y %H:%M:%S")
             if local.year != identity["year"]:
                 raise ValueError("feed year does not match proof identity")
-            derived = local.replace(tzinfo=ZoneInfo(identity["timezone"])).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            derived = (
+                local.replace(tzinfo=ZoneInfo(identity["timezone"]))
+                .astimezone(UTC)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
         except (KeyError, TypeError, ValueError, ZoneInfoNotFoundError) as exc:
             raise DocumentContractError([DocumentIssue("publication_proof_identity", evidence_id)]) from exc
         expected_precision = "second"
@@ -601,7 +756,8 @@ def validate_publication_proof(
             )
             or row.get("publication_proof_artifact") != row.get("capture_artifact")
             or row.get("publication_proof_sha256") != row.get("source_sha256")
-            or source_bytes is None or proof_bytes != source_bytes
+            or source_bytes is None
+            or proof_bytes != source_bytes
             or not _body_has_markers(proof_bytes, identity.get("body_markers"))
         ):
             raise DocumentContractError([DocumentIssue("publication_proof_source_identity", evidence_id)])
@@ -609,7 +765,7 @@ def validate_publication_proof(
             day = parse_date(identity["date"], "publication_proof.date")
         except (KeyError, TypeError, MarketContractError) as exc:
             raise DocumentContractError([DocumentIssue("publication_proof_shape", evidence_id)]) from exc
-        derived = datetime.combine(day, time(23, 59, 59), tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+        derived = datetime.combine(day, time(23, 59, 59), tzinfo=UTC).isoformat().replace("+00:00", "Z")
         expected_precision = "date"
     else:
         raise DocumentContractError([DocumentIssue("publication_proof_kind", evidence_id)])
@@ -622,26 +778,71 @@ def validate_publication_proof(
 
 def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
     required = {
-        "evidence_id", "issuer_id", "cik", "event_id", "source_kind", "form", "title",
-        "canonical_url", "published_at", "published_at_precision", "source_revised_at", "captured_at", "vintage_status",
-        "license_id", "redistribution", "content_scope", "summary", "summary_sha256", "source_sha256", "capture_id", "capture_artifact",
-        "publication_proof_kind", "publication_proof_artifact", "publication_proof_sha256", "publication_proof_identity",
-        "publication_index_artifact", "publication_index_sha256",
-        "publication_issuer_artifact", "publication_issuer_sha256",
+        "evidence_id",
+        "issuer_id",
+        "cik",
+        "event_id",
+        "source_kind",
+        "form",
+        "title",
+        "canonical_url",
+        "published_at",
+        "published_at_precision",
+        "source_revised_at",
+        "captured_at",
+        "vintage_status",
+        "license_id",
+        "redistribution",
+        "content_scope",
+        "summary",
+        "summary_sha256",
+        "source_sha256",
+        "capture_id",
+        "capture_artifact",
+        "publication_proof_kind",
+        "publication_proof_artifact",
+        "publication_proof_sha256",
+        "publication_proof_identity",
+        "publication_index_artifact",
+        "publication_index_sha256",
+        "publication_issuer_artifact",
+        "publication_issuer_sha256",
     }
     issues: list[DocumentIssue | ContractIssue] = []
     if not required <= set(row) <= required | {"available_at"}:
         issues.append(DocumentIssue("document_shape", str(row.get("evidence_id", "unknown"))))
     required_strings = {
-        "evidence_id", "issuer_id", "cik", "event_id", "source_kind", "title", "canonical_url",
-        "published_at", "published_at_precision", "captured_at", "vintage_status", "license_id",
-        "redistribution", "content_scope", "summary", "summary_sha256", "source_sha256", "capture_id",
+        "evidence_id",
+        "issuer_id",
+        "cik",
+        "event_id",
+        "source_kind",
+        "title",
+        "canonical_url",
+        "published_at",
+        "published_at_precision",
+        "captured_at",
+        "vintage_status",
+        "license_id",
+        "redistribution",
+        "content_scope",
+        "summary",
+        "summary_sha256",
+        "source_sha256",
+        "capture_id",
     }
     nullable_strings = {
-        "form", "source_revised_at", "capture_artifact", "publication_proof_kind",
-        "publication_proof_artifact", "publication_proof_sha256", "publication_proof_identity",
-        "publication_index_artifact", "publication_index_sha256",
-        "publication_issuer_artifact", "publication_issuer_sha256",
+        "form",
+        "source_revised_at",
+        "capture_artifact",
+        "publication_proof_kind",
+        "publication_proof_artifact",
+        "publication_proof_sha256",
+        "publication_proof_identity",
+        "publication_index_artifact",
+        "publication_index_sha256",
+        "publication_issuer_artifact",
+        "publication_issuer_sha256",
     }
     if "available_at" in row:
         required_strings.add("available_at")
@@ -662,10 +863,13 @@ def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
             pass
     if row.get("source_kind") == "licensed_news_metadata":
         parsed = urlparse(str(row.get("canonical_url", "")))
-        url_allowed = parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+        url_allowed = (
+            parsed.scheme == "https" and bool(parsed.hostname) and not parsed.username and not parsed.password
+        )
     elif proof_identity.get("source_authority_id") is not None:
         url_allowed = row.get("source_kind") == "primary_source" and _authority_host(
-            str(row.get("canonical_url", "")), proof_identity,
+            str(row.get("canonical_url", "")),
+            proof_identity,
         )
     else:
         url_allowed = _allowed_host(str(row.get("canonical_url", "")), issuer, issuers)
@@ -700,13 +904,23 @@ def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
             issues.append(DocumentIssue("digest", name))
     artifact = row.get("capture_artifact")
     if artifact is not None:
-        local_news_artifact = row.get("source_kind") == "licensed_news_metadata" and artifact == "news-metadata.jsonl"
-        authoritative_artifact = isinstance(artifact, str) and artifact.startswith("raw/") and ".." not in Path(artifact).parts
+        local_news_artifact = (
+            row.get("source_kind") == "licensed_news_metadata" and artifact == "news-metadata.jsonl"
+        )
+        authoritative_artifact = (
+            isinstance(artifact, str) and artifact.startswith("raw/") and ".." not in Path(artifact).parts
+        )
         if not local_news_artifact and not authoritative_artifact:
             issues.append(DocumentIssue("capture_artifact", str(artifact)))
-    proof_values = tuple(row.get(name) for name in (
-        "publication_proof_kind", "publication_proof_artifact", "publication_proof_sha256", "publication_proof_identity",
-    ))
+    proof_values = tuple(
+        row.get(name)
+        for name in (
+            "publication_proof_kind",
+            "publication_proof_artifact",
+            "publication_proof_sha256",
+            "publication_proof_identity",
+        )
+    )
     index_values = (row.get("publication_index_artifact"), row.get("publication_index_sha256"))
     issuer_values = (row.get("publication_issuer_artifact"), row.get("publication_issuer_sha256"))
     if row.get("source_kind") == "licensed_news_metadata":
@@ -716,8 +930,11 @@ def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
         kind, proof_artifact, proof_sha, _identity = proof_values
         if kind not in PROOF_KINDS:
             issues.append(DocumentIssue("publication_proof_kind", str(row.get("evidence_id"))))
-        if not isinstance(proof_artifact, str) or not proof_artifact.startswith("raw/") \
-                or ".." in Path(proof_artifact).parts:
+        if (
+            not isinstance(proof_artifact, str)
+            or not proof_artifact.startswith("raw/")
+            or ".." in Path(proof_artifact).parts
+        ):
             issues.append(DocumentIssue("publication_proof_artifact", str(row.get("evidence_id"))))
         if not isinstance(proof_sha, str) or SHA256.fullmatch(proof_sha) is None:
             issues.append(DocumentIssue("publication_proof_digest", str(row.get("evidence_id"))))
@@ -729,12 +946,17 @@ def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
         if (index_artifact is None) != (index_sha is None):
             issues.append(DocumentIssue("publication_proof_index_shape", str(row.get("evidence_id"))))
         elif index_artifact is not None and (
-            not isinstance(index_artifact, str) or not index_artifact.startswith("raw/")
-            or ".." in Path(index_artifact).parts or not isinstance(index_sha, str)
+            not isinstance(index_artifact, str)
+            or not index_artifact.startswith("raw/")
+            or ".." in Path(index_artifact).parts
+            or not isinstance(index_sha, str)
             or SHA256.fullmatch(index_sha) is None
         ):
             issues.append(DocumentIssue("publication_proof_index_shape", str(row.get("evidence_id"))))
-        needs_index = kind == "sec_submission_acceptance" and proof_identity.get("document_role") == "accession_document"
+        needs_index = (
+            kind == "sec_submission_acceptance"
+            and proof_identity.get("document_role") == "accession_document"
+        )
         if needs_index != (index_artifact is not None):
             issues.append(DocumentIssue("publication_proof_index_shape", str(row.get("evidence_id"))))
         issuer_artifact, issuer_sha = issuer_values
@@ -742,8 +964,10 @@ def validate_document_row(row: dict[str, Any], issuers: dict[str, Any]) -> None:
         if needs_issuer != (issuer_artifact is not None):
             issues.append(DocumentIssue("publication_proof_issuer_shape", str(row.get("evidence_id"))))
         elif issuer_artifact is not None and (
-            not isinstance(issuer_artifact, str) or not issuer_artifact.startswith("raw/")
-            or ".." in Path(issuer_artifact).parts or not isinstance(issuer_sha, str)
+            not isinstance(issuer_artifact, str)
+            or not issuer_artifact.startswith("raw/")
+            or ".." in Path(issuer_artifact).parts
+            or not isinstance(issuer_sha, str)
             or SHA256.fullmatch(issuer_sha) is None
         ):
             issues.append(DocumentIssue("publication_proof_issuer_shape", str(row.get("evidence_id"))))
@@ -761,19 +985,43 @@ def eligible_at(row: dict[str, Any], cutoff: datetime) -> bool:
 def _snapshot_shape_issues(manifest: Any) -> list[DocumentIssue]:
     issues: list[DocumentIssue] = []
     expected = {
-        "schema_version", "snapshot_kind", "snapshot_id", "normalizer_version", "gate", "data_tier",
-        "vintage_status", "created_at", "captured_at", "cutoff_policy", "issuers", "corpus_sha256",
-        "requirements", "observed_coverage", "sources", "artifacts", "gaps",
+        "schema_version",
+        "snapshot_kind",
+        "snapshot_id",
+        "normalizer_version",
+        "gate",
+        "data_tier",
+        "vintage_status",
+        "created_at",
+        "captured_at",
+        "cutoff_policy",
+        "issuers",
+        "corpus_sha256",
+        "requirements",
+        "observed_coverage",
+        "sources",
+        "artifacts",
+        "gaps",
     }
     if not isinstance(manifest, dict) or set(manifest) != expected:
         return [DocumentIssue("manifest_shape", "root")]
     if (
         type(manifest.get("schema_version")) is not int
         or type(manifest.get("normalizer_version")) is not int
-        or any(not isinstance(manifest.get(key), str) or not manifest[key] for key in (
-            "snapshot_kind", "snapshot_id", "gate", "data_tier", "vintage_status", "created_at",
-            "captured_at", "cutoff_policy", "corpus_sha256",
-        ))
+        or any(
+            not isinstance(manifest.get(key), str) or not manifest[key]
+            for key in (
+                "snapshot_kind",
+                "snapshot_id",
+                "gate",
+                "data_tier",
+                "vintage_status",
+                "created_at",
+                "captured_at",
+                "cutoff_policy",
+                "corpus_sha256",
+            )
+        )
         or SHA256.fullmatch(manifest["corpus_sha256"]) is None
     ):
         issues.append(DocumentIssue("manifest_scalar_type", "root"))
@@ -783,9 +1031,11 @@ def _snapshot_shape_issues(manifest: Any) -> list[DocumentIssue]:
     else:
         for issuer_id, issuer in issuers.items():
             if (
-                not isinstance(issuer_id, str) or not isinstance(issuer, dict)
+                not isinstance(issuer_id, str)
+                or not isinstance(issuer, dict)
                 or set(issuer) != {"cik", "official_hosts"}
-                or not isinstance(issuer.get("cik"), str) or re.fullmatch(r"[0-9]{10}", issuer["cik"]) is None
+                or not isinstance(issuer.get("cik"), str)
+                or re.fullmatch(r"[0-9]{10}", issuer["cik"]) is None
                 or not _strings(issuer.get("official_hosts"), minimum=1)
             ):
                 issues.append(DocumentIssue("manifest_shape", "issuers"))
@@ -793,9 +1043,12 @@ def _snapshot_shape_issues(manifest: Any) -> list[DocumentIssue]:
     requirements = manifest.get("requirements")
     requirement_keys = {"requirement_id", "issuer_id", "event_id", "source_kinds", "cutoff"}
     if not isinstance(requirements, list) or any(
-        not isinstance(item, dict) or not requirement_keys <= set(item)
+        not isinstance(item, dict)
+        or not requirement_keys <= set(item)
         or not set(item) <= requirement_keys | {"filing_summary"}
-        or not all(isinstance(item.get(key), str) and item[key] for key in requirement_keys - {"source_kinds"})
+        or not all(
+            isinstance(item.get(key), str) and item[key] for key in requirement_keys - {"source_kinds"}
+        )
         or not _strings(item.get("source_kinds"), minimum=1)
         or ("filing_summary" in item and not isinstance(item["filing_summary"], str))
         for item in requirements or []
@@ -804,35 +1057,75 @@ def _snapshot_shape_issues(manifest: Any) -> list[DocumentIssue]:
     observed = manifest.get("observed_coverage")
     if (
         not isinstance(observed, dict)
-        or set(observed) != {"documents", "coverage_rows", "issuers", "source_kinds", "published_start", "published_end"}
-        or type(observed.get("documents")) is not int or observed["documents"] < 0
-        or type(observed.get("coverage_rows")) is not int or observed["coverage_rows"] < 0
-        or not _strings(observed.get("issuers")) or not _strings(observed.get("source_kinds"))
-        or any(observed.get(key) is not None and not isinstance(observed.get(key), str) for key in ("published_start", "published_end"))
+        or set(observed)
+        != {"documents", "coverage_rows", "issuers", "source_kinds", "published_start", "published_end"}
+        or type(observed.get("documents")) is not int
+        or observed["documents"] < 0
+        or type(observed.get("coverage_rows")) is not int
+        or observed["coverage_rows"] < 0
+        or not _strings(observed.get("issuers"))
+        or not _strings(observed.get("source_kinds"))
+        or any(
+            observed.get(key) is not None and not isinstance(observed.get(key), str)
+            for key in ("published_start", "published_end")
+        )
     ):
         issues.append(DocumentIssue("manifest_shape", "observed_coverage"))
     sources = manifest.get("sources")
     source_keys = {
-        "capture_id", "adapter", "manifest_sha256", "captured_at", "vintage_status", "license_id",
-        "redistribution", "archive_proof", "path",
+        "capture_id",
+        "adapter",
+        "manifest_sha256",
+        "captured_at",
+        "vintage_status",
+        "license_id",
+        "redistribution",
+        "archive_proof",
+        "path",
     }
     if not isinstance(sources, list) or any(
-        not isinstance(item, dict) or set(item) != source_keys
-        or not all(isinstance(item.get(key), str) and item[key] for key in (
-            "capture_id", "adapter", "manifest_sha256", "captured_at", "vintage_status", "path",
-        ))
+        not isinstance(item, dict)
+        or set(item) != source_keys
+        or not all(
+            isinstance(item.get(key), str) and item[key]
+            for key in (
+                "capture_id",
+                "adapter",
+                "manifest_sha256",
+                "captured_at",
+                "vintage_status",
+                "path",
+            )
+        )
         or SHA256.fullmatch(item["manifest_sha256"]) is None
-        or any(item.get(key) is not None and not isinstance(item.get(key), str) for key in ("license_id", "redistribution"))
+        or any(
+            item.get(key) is not None and not isinstance(item.get(key), str)
+            for key in ("license_id", "redistribution")
+        )
         or (
-            item.get("archive_proof") is not None and (
+            item.get("archive_proof") is not None
+            and (
                 not isinstance(item["archive_proof"], dict)
-                or set(item["archive_proof"]) != {
-                    "path", "sha256", "canonical_url", "proved_at", "coverage_end_exclusive", "bytes",
+                or set(item["archive_proof"])
+                != {
+                    "path",
+                    "sha256",
+                    "canonical_url",
+                    "proved_at",
+                    "coverage_end_exclusive",
+                    "bytes",
                 }
                 or type(item["archive_proof"].get("bytes")) is not int
-                or any(not isinstance(item["archive_proof"].get(key), str) for key in (
-                    "path", "sha256", "canonical_url", "proved_at", "coverage_end_exclusive",
-                ))
+                or any(
+                    not isinstance(item["archive_proof"].get(key), str)
+                    for key in (
+                        "path",
+                        "sha256",
+                        "canonical_url",
+                        "proved_at",
+                        "coverage_end_exclusive",
+                    )
+                )
             )
         )
         for item in sources or []
@@ -840,12 +1133,18 @@ def _snapshot_shape_issues(manifest: Any) -> list[DocumentIssue]:
         issues.append(DocumentIssue("manifest_shape", "sources"))
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, list) or any(
-        not isinstance(item, dict) or set(item) != {"path", "sha256", "bytes", "records", "media_type"}
-        or not isinstance(item.get("path"), str) or not item["path"]
-        or not isinstance(item.get("sha256"), str) or SHA256.fullmatch(item["sha256"]) is None
-        or type(item.get("bytes")) is not int or item["bytes"] < 0
-        or type(item.get("records")) is not int or item["records"] < 0
-        or not isinstance(item.get("media_type"), str) or not item["media_type"]
+        not isinstance(item, dict)
+        or set(item) != {"path", "sha256", "bytes", "records", "media_type"}
+        or not isinstance(item.get("path"), str)
+        or not item["path"]
+        or not isinstance(item.get("sha256"), str)
+        or SHA256.fullmatch(item["sha256"]) is None
+        or type(item.get("bytes")) is not int
+        or item["bytes"] < 0
+        or type(item.get("records")) is not int
+        or item["records"] < 0
+        or not isinstance(item.get("media_type"), str)
+        or not item["media_type"]
         for item in artifacts or []
     ):
         issues.append(DocumentIssue("manifest_shape", "artifacts"))
@@ -866,20 +1165,26 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
     issues: list[DocumentIssue | ContractIssue] = _snapshot_shape_issues(manifest)
     if issues:
         raise DocumentContractError(issues)
-    if type(manifest.get("schema_version")) is not int or manifest.get("schema_version") != 2 \
-            or manifest.get("snapshot_kind") != "documents":
+    if (
+        type(manifest.get("schema_version")) is not int
+        or manifest.get("schema_version") != 2
+        or manifest.get("snapshot_kind") != "documents"
+    ):
         issues.append(DocumentIssue("manifest_version", str(manifest.get("schema_version"))))
     if type(manifest.get("normalizer_version")) is not int or manifest.get("normalizer_version") != 2:
         issues.append(DocumentIssue("normalizer_version", str(manifest.get("normalizer_version"))))
-    expected_snapshot_id = content_id("documents", {
-        "normalizer_version": manifest.get("normalizer_version"),
-        "captures": sorted(
-            (item.get("capture_id"), item.get("manifest_sha256"))
-            for item in manifest.get("sources", [])
-        ),
-        "corpus_sha256": manifest.get("corpus_sha256"),
-        "gate": gate, "captured_at": manifest.get("captured_at"),
-    })
+    expected_snapshot_id = content_id(
+        "documents",
+        {
+            "normalizer_version": manifest.get("normalizer_version"),
+            "captures": sorted(
+                (item.get("capture_id"), item.get("manifest_sha256")) for item in manifest.get("sources", [])
+            ),
+            "corpus_sha256": manifest.get("corpus_sha256"),
+            "gate": gate,
+            "captured_at": manifest.get("captured_at"),
+        },
+    )
     if manifest.get("snapshot_id") != expected_snapshot_id:
         issues.append(DocumentIssue("snapshot_identity", str(manifest.get("snapshot_id"))))
     if manifest.get("gate") != gate:
@@ -923,6 +1228,7 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
             try:
                 import pyarrow as pa
                 import pyarrow.parquet as pq
+
                 if pq.ParquetFile(pa.BufferReader(body)).metadata.num_rows != artifact.get("records"):
                     issues.append(DocumentIssue("artifact_records", relative))
             except Exception as exc:
@@ -955,17 +1261,22 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 issues.append(DocumentIssue("capture_shape", capture_id))
             if capture.get("capture_id") != capture_id or capture.get("adapter") != source.get("adapter"):
                 issues.append(DocumentIssue("capture_identity", capture_id))
-            if capture.get("captured_at") != source.get("captured_at") or capture.get("vintage_status") != source.get("vintage_status"):
+            if capture.get("captured_at") != source.get("captured_at") or capture.get(
+                "vintage_status"
+            ) != source.get("vintage_status"):
                 issues.append(DocumentIssue("capture_time_vintage", capture_id))
             proof = source.get("archive_proof")
             if source.get("vintage_status") == "archived_at_cutoff":
                 try:
                     proof_bytes = tree.get(capture_prefix + proof["path"])
                     if (
-                        parse_utc(proof["proved_at"], "archive_proof.proved_at") > parse_utc(source["captured_at"])
-                        or parse_date(proof["coverage_end_exclusive"]) > parse_utc(source["captured_at"]).date()
+                        parse_utc(proof["proved_at"], "archive_proof.proved_at")
+                        > parse_utc(source["captured_at"])
+                        or parse_date(proof["coverage_end_exclusive"])
+                        > parse_utc(source["captured_at"]).date()
                         or not str(proof["canonical_url"]).startswith("https://")
-                        or proof_bytes is None or len(proof_bytes) != proof["bytes"]
+                        or proof_bytes is None
+                        or len(proof_bytes) != proof["bytes"]
                         or sha256_bytes(proof_bytes) != proof["sha256"]
                     ):
                         issues.append(DocumentIssue("archive_proof_invalid", capture_id))
@@ -983,12 +1294,23 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 authoritative_capture_ids.add(capture_id)
                 try:
                     expected_capture_keys = {
-                        "schema_version", "capture_id", "adapter", "adapter_version", "captured_at",
-                        "vintage_status", "corpus_sha256", "records", "raw_artifacts", "gaps",
-                        "records_artifact", "gaps_artifact", "requests",
+                        "schema_version",
+                        "capture_id",
+                        "adapter",
+                        "adapter_version",
+                        "captured_at",
+                        "vintage_status",
+                        "corpus_sha256",
+                        "records",
+                        "raw_artifacts",
+                        "gaps",
+                        "records_artifact",
+                        "gaps_artifact",
+                        "requests",
                     }
                     if frozenset(capture) not in {
-                        frozenset(expected_capture_keys), frozenset(expected_capture_keys | {"migration"}),
+                        frozenset(expected_capture_keys),
+                        frozenset(expected_capture_keys | {"migration"}),
                     }:
                         raise TypeError("authoritative capture schema")
                     records_bytes = tree[capture_prefix + "records.jsonl"]
@@ -999,26 +1321,40 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                         "records_artifact": ("records.jsonl", records_bytes),
                         "gaps_artifact": ("gaps.json", gaps_bytes),
                     }
-                    if capture.get("adapter_version") != 7 or any(
-                        capture.get(key) != {
-                            "path": name, "bytes": len(body), "sha256": sha256_bytes(body),
-                        } for key, (name, body) in descriptors.items()
-                    ) or gaps != capture.get("gaps") or len(records) != capture.get("records"):
+                    if (
+                        capture.get("adapter_version") != 7
+                        or any(
+                            capture.get(key)
+                            != {
+                                "path": name,
+                                "bytes": len(body),
+                                "sha256": sha256_bytes(body),
+                            }
+                            for key, (name, body) in descriptors.items()
+                        )
+                        or gaps != capture.get("gaps")
+                        or len(records) != capture.get("records")
+                    ):
                         issues.append(DocumentIssue("capture_content_binding", capture_id))
                     if "migration" in capture and not valid_document_migration(capture["migration"]):
                         issues.append(DocumentIssue("capture_migration_provenance", capture_id))
-                    material = [{key: value for key, value in row.items() if key != "capture_id"} for row in records]
+                    material = [
+                        {key: value for key, value in row.items() if key != "capture_id"} for row in records
+                    ]
                     identity = {
                         "adapter_version": capture.get("adapter_version"),
                         "corpus_sha256": capture.get("corpus_sha256"),
                         "captured_at": capture.get("captured_at"),
                         "raw_artifacts": capture.get("raw_artifacts"),
-                        "records": material, "gaps": gaps,
+                        "records": material,
+                        "gaps": gaps,
                     }
                     if "migration" in capture:
                         identity["migration"] = capture["migration"]
                     expected_capture = content_id("doccapture", identity)
-                    if expected_capture != capture_id or any(row.get("capture_id") != capture_id for row in records):
+                    if expected_capture != capture_id or any(
+                        row.get("capture_id") != capture_id for row in records
+                    ):
                         issues.append(DocumentIssue("capture_content_identity", capture_id))
                     for record in records:
                         key = (capture_id, str(record.get("evidence_id", "")))
@@ -1029,9 +1365,12 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                     issues.append(DocumentIssue("capture_content_binding", capture_id))
             for item in artifact_rows:
                 if (
-                    not isinstance(item, dict) or set(item) != {"path", "bytes", "sha256"}
-                    or not isinstance(item.get("path"), str) or Path(item["path"]).is_absolute()
-                    or ".." in Path(item["path"]).parts or type(item.get("bytes")) is not int
+                    not isinstance(item, dict)
+                    or set(item) != {"path", "bytes", "sha256"}
+                    or not isinstance(item.get("path"), str)
+                    or Path(item["path"]).is_absolute()
+                    or ".." in Path(item["path"]).parts
+                    or type(item.get("bytes")) is not int
                     or not isinstance(item.get("sha256"), str)
                 ):
                     issues.append(DocumentIssue("capture_artifact_shape", capture_id))
@@ -1043,21 +1382,28 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                     digests.add(item["sha256"])
                     capture_artifact_bytes[(capture_id, item["path"])] = body
             descriptors = {
-                item.get("path"): item for item in artifact_rows
+                item.get("path"): item
+                for item in artifact_rows
                 if isinstance(item, dict) and isinstance(item.get("path"), str)
             }
             if len(descriptors) != len(artifact_rows):
                 issues.append(DocumentIssue("capture_artifact_collision", capture_id))
             declared_capture_files = {
                 "capture.json",
-                *(item["path"] for item in artifact_rows if isinstance(item, dict) and isinstance(item.get("path"), str)),
+                *(
+                    item["path"]
+                    for item in artifact_rows
+                    if isinstance(item, dict) and isinstance(item.get("path"), str)
+                ),
             }
             if capture.get("adapter") == "authoritative":
                 declared_capture_files |= {"records.jsonl", "gaps.json"}
-            if isinstance(capture.get("archive_proof"), dict) and isinstance(capture["archive_proof"].get("path"), str):
+            if isinstance(capture.get("archive_proof"), dict) and isinstance(
+                capture["archive_proof"].get("path"), str
+            ):
                 declared_capture_files.add(capture["archive_proof"]["path"])
             observed_capture_files = {
-                relative[len(capture_prefix):] for relative in tree if relative.startswith(capture_prefix)
+                relative[len(capture_prefix) :] for relative in tree if relative.startswith(capture_prefix)
             }
             if declared_capture_files != observed_capture_files:
                 issues.append(DocumentIssue("capture_artifact_inventory", capture_id))
@@ -1069,6 +1415,7 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
+
         documents = pq.read_table(pa.BufferReader(tree["documents.parquet"])).to_pylist()
         coverage = pq.read_table(pa.BufferReader(tree["coverage.parquet"])).to_pylist()
     except Exception as exc:
@@ -1091,7 +1438,10 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 comparable.pop("available_at", None)
             if captured_records.get((capture_id, identity)) != comparable:
                 issues.append(DocumentIssue("document_capture_record_drift", identity))
-        if capture_id in capture_coverage_ends and parse_utc(row.get("published_at"), "published_at").date() >= capture_coverage_ends[capture_id]:
+        if (
+            capture_id in capture_coverage_ends
+            and parse_utc(row.get("published_at"), "published_at").date() >= capture_coverage_ends[capture_id]
+        ):
             issues.append(DocumentIssue("archive_proof_coverage", identity))
         if row.get("source_sha256") not in capture_digests.get(capture_id, set()):
             issues.append(DocumentIssue("source_capture_digest", identity))
@@ -1104,7 +1454,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 source_bytes = capture_artifact_bytes.get((capture_id, capture_artifact))
                 descriptor = capture_descriptors.get(capture_id, {}).get(capture_artifact, {})
                 if (
-                    source_bytes is None or len(source_bytes) != descriptor.get("bytes")
+                    source_bytes is None
+                    or len(source_bytes) != descriptor.get("bytes")
                     or descriptor.get("sha256") != row.get("source_sha256")
                     or sha256_bytes(source_bytes) != row.get("source_sha256")
                 ):
@@ -1120,7 +1471,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 proof_bytes = capture_artifact_bytes.get((capture_id, proof_artifact))
                 proof_descriptor = capture_descriptors.get(capture_id, {}).get(proof_artifact, {})
                 if (
-                    proof_bytes is None or len(proof_bytes) != proof_descriptor.get("bytes")
+                    proof_bytes is None
+                    or len(proof_bytes) != proof_descriptor.get("bytes")
                     or proof_descriptor.get("sha256") != row.get("publication_proof_sha256")
                     or sha256_bytes(proof_bytes) != row.get("publication_proof_sha256")
                 ):
@@ -1134,7 +1486,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                         candidate_index = capture_artifact_bytes.get((capture_id, index_artifact))
                         index_descriptor = capture_descriptors.get(capture_id, {}).get(index_artifact, {})
                         if (
-                            candidate_index is None or len(candidate_index) != index_descriptor.get("bytes")
+                            candidate_index is None
+                            or len(candidate_index) != index_descriptor.get("bytes")
                             or index_descriptor.get("sha256") != row.get("publication_index_sha256")
                             or sha256_bytes(candidate_index) != row.get("publication_index_sha256")
                         ):
@@ -1149,7 +1502,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                         candidate_issuer = capture_artifact_bytes.get((capture_id, issuer_artifact))
                         issuer_descriptor = capture_descriptors.get(capture_id, {}).get(issuer_artifact, {})
                         if (
-                            candidate_issuer is None or len(candidate_issuer) != issuer_descriptor.get("bytes")
+                            candidate_issuer is None
+                            or len(candidate_issuer) != issuer_descriptor.get("bytes")
                             or issuer_descriptor.get("sha256") != row.get("publication_issuer_sha256")
                             or sha256_bytes(candidate_issuer) != row.get("publication_issuer_sha256")
                         ):
@@ -1163,7 +1517,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
                 issues.extend(exc.issues)
     observed = manifest.get("observed_coverage", {})
     direct = {
-        "documents": len(documents), "coverage_rows": len(coverage),
+        "documents": len(documents),
+        "coverage_rows": len(coverage),
         "issuers": sorted({row["issuer_id"] for row in documents}),
         "source_kinds": sorted({row["source_kind"] for row in documents}),
         "published_start": min((row["published_at"] for row in documents), default=None),
@@ -1178,7 +1533,8 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
     requirements = manifest.get("requirements", [])
     expected_pairs = {
         (requirement.get("requirement_id"), kind)
-        for requirement in requirements for kind in requirement.get("source_kinds", [])
+        for requirement in requirements
+        for kind in requirement.get("source_kinds", [])
     }
     observed_pairs = {(row.get("requirement_id"), row.get("source_kind")) for row in coverage}
     if expected_pairs != observed_pairs:
@@ -1191,12 +1547,14 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
             continue
         for kind in requirement.get("source_kinds", []):
             actual_rows = [
-                row for row in coverage
+                row
+                for row in coverage
                 if row.get("requirement_id") == requirement.get("requirement_id")
                 and row.get("source_kind") == kind
             ]
             expected = [
-                row for row in documents
+                row
+                for row in documents
                 if row.get("issuer_id") == requirement.get("issuer_id")
                 and row.get("source_kind") == kind
                 and parse_utc(row.get("available_at", row.get("published_at")), "available_at") <= cutoff
@@ -1204,15 +1562,23 @@ def validate_document_snapshot(root: Path, gate: str = "reconstruction") -> dict
             ]
             actual_ids = {row.get("evidence_id") for row in actual_rows if row.get("evidence_id")}
             if actual_ids != {row["evidence_id"] for row in expected}:
-                issues.append(DocumentIssue("coverage_evidence_drift", str(requirement.get("requirement_id"))))
+                issues.append(
+                    DocumentIssue("coverage_evidence_drift", str(requirement.get("requirement_id")))
+                )
             for item in actual_rows:
                 evidence_id = item.get("evidence_id")
                 if evidence_id is None:
-                    if item.get("status") != "unsupported" or not str(item.get("gap_code", "")).startswith("unsupported_"):
-                        issues.append(DocumentIssue("coverage_gap_contract", str(requirement.get("requirement_id"))))
+                    if item.get("status") != "unsupported" or not str(item.get("gap_code", "")).startswith(
+                        "unsupported_"
+                    ):
+                        issues.append(
+                            DocumentIssue("coverage_gap_contract", str(requirement.get("requirement_id")))
+                        )
                     continue
                 evidence = by_evidence.get(evidence_id, {})
-                expected_status = "available_metadata" if evidence.get("content_scope") == "metadata_only" else "available"
+                expected_status = (
+                    "available_metadata" if evidence.get("content_scope") == "metadata_only" else "available"
+                )
                 if (
                     item.get("status") != expected_status
                     or item.get("issuer_id") != evidence.get("issuer_id")

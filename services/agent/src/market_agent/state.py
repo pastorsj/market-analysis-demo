@@ -59,18 +59,30 @@ class StateStore:
         return AESGCM(self._key).decrypt(payload[:12], payload[12:], identifier.encode())
 
     def save(self, record: InvestigationRecord, *, create: bool = False) -> bool:
-        identifier = str(record.investigation_id); canonical = json.dumps(record.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode(); encrypted = self._encrypt(identifier, canonical)
+        identifier = str(record.investigation_id)
+        canonical = json.dumps(record.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+        encrypted = self._encrypt(identifier, canonical)
         try:
             with self._lock, self._db:
-                self._db.execute("INSERT INTO investigations(id,payload,updated) VALUES(?,?,?)" + ("" if create else " ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, updated=excluded.updated"), (identifier, encrypted, record.updated_at.isoformat()))
-        except sqlite3.IntegrityError: return False
+                self._db.execute(
+                    "INSERT INTO investigations(id,payload,updated) VALUES(?,?,?)"
+                    + (
+                        ""
+                        if create
+                        else " ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, updated=excluded.updated"
+                    ),
+                    (identifier, encrypted, record.updated_at.isoformat()),
+                )
+        except sqlite3.IntegrityError:
+            return False
         return True
 
     def get(self, identifier: UUID | str) -> InvestigationRecord | None:
         key = str(identifier)
         with self._lock:
             row = self._db.execute("SELECT payload FROM investigations WHERE id=?", (key,)).fetchone()
-        if row is None: return None
+        if row is None:
+            return None
         return InvestigationRecord.model_validate_json(self._decrypt(key, row[0]))
 
     def close(self) -> None:

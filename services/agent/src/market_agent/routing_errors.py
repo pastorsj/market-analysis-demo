@@ -27,7 +27,8 @@ def _exception_chain(exc: BaseException) -> tuple[BaseException, ...]:
 def _timed_out(chain: tuple[BaseException, ...]) -> bool:
     return any(
         isinstance(item, (asyncio.TimeoutError, APITimeoutError, httpx.TimeoutException))
-        or "timeout" in type(item).__name__.lower() for item in chain
+        or "timeout" in type(item).__name__.lower()
+        for item in chain
     )
 
 
@@ -36,7 +37,9 @@ def route_failure_class(exc: Exception) -> str:
 
     primary_detail = str(exc).lower()
     chain = _exception_chain(exc)
-    detail = " ".join(value for item in chain for value in (type(item).__name__, str(item), repr(item))).lower()
+    detail = " ".join(
+        value for item in chain for value in (type(item).__name__, str(item), repr(item))
+    ).lower()
     context_overflow = any(
         isinstance(item, ContextOverflowError)
         or (

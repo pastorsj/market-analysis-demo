@@ -18,7 +18,12 @@ from .config import LOCAL_MODEL
 from .generation_health import generation_health
 from .deep_answers import submission_validation_error
 from .deep_evidence import EvidenceCollector
-from .deep_submission import EvidenceSubmissionRepair, current_skill_loaded, typed_submission_correction, valid_skill_call
+from .deep_submission import (
+    EvidenceSubmissionRepair,
+    current_skill_loaded,
+    typed_submission_correction,
+    valid_skill_call,
+)
 from .routing_errors import retryable_remote_connection_error
 from .routing_errors import route_failure_class as _route_failure_class
 from .schemas import ModelAttempt, TokenCounts
@@ -65,9 +70,7 @@ class RoutedCallObserver:
         display = "Routing judge" if tier == "judge" else "Agent reasoning"
         role = "routing_judge" if tier == "judge" else "agent_reasoning"
 
-        async def record(
-            *, body: Mapping[str, object] | None = None, failure: str | None = None
-        ) -> None:
+        async def record(*, body: Mapping[str, object] | None = None, failure: str | None = None) -> None:
             succeeded = failure is None
             identity = "direct_provider_verified" if succeeded else "unavailable"
             attempt = ModelAttempt(
@@ -125,9 +128,7 @@ class RoutedCallObserver:
             observation = self.recorder.expect_network(boundary, destination)
             try:
                 body = await invoke()
-                assertion = (
-                    body.get("model") if isinstance(body.get("model"), str) else None
-                )
+                assertion = body.get("model") if isinstance(body.get("model"), str) else None
                 if assertion != model_id:
                     raise RuntimeError("identity_mismatch")
             except asyncio.CancelledError:
@@ -172,21 +173,15 @@ class AgentActivityCallback(AsyncCallbackHandler):
         label = "Skill load" if name == "read_file" else "Subagent analysis"
         key = f"activity-{run_id.hex}"
         self.pending[run_id] = (key, label)
-        await self.progress(
-            key=key, kind="planning", display_name=label, state="started"
-        )
+        await self.progress(key=key, kind="planning", display_name=label, state="started")
 
     async def on_tool_end(self, output, *, run_id, **kwargs):
         if item := self.pending.pop(run_id, None):
-            await self.progress(
-                key=item[0], kind="planning", display_name=item[1], state="completed"
-            )
+            await self.progress(key=item[0], kind="planning", display_name=item[1], state="completed")
 
     async def on_tool_error(self, error, *, run_id, **kwargs):
         if item := self.pending.pop(run_id, None):
-            await self.progress(
-                key=item[0], kind="planning", display_name=item[1], state="failed"
-            )
+            await self.progress(key=item[0], kind="planning", display_name=item[1], state="failed")
 
 
 class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
@@ -200,7 +195,8 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
     """
 
     def __init__(
-        self, selected_skill: str | None = None,
+        self,
+        selected_skill: str | None = None,
         collector: EvidenceCollector | None = None,
     ):
         self.selected_skill = selected_skill
@@ -210,8 +206,10 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
     @staticmethod
     def _tool_names(response: ModelResponse[Any]) -> list[str]:
         return [
-            str(call.get("name", "")) for message in response.result
-            for call in (getattr(message, "tool_calls", None) or ())]
+            str(call.get("name", ""))
+            for message in response.result
+            for call in (getattr(message, "tool_calls", None) or ())
+        ]
 
     @staticmethod
     def _keep_first_submission(response: ModelResponse[Any]) -> ModelResponse[Any]:
@@ -223,9 +221,8 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
                 result.append(message)
                 continue
             selected = next(
-                (call for call in calls
-                 if not kept and call.get("name") == "submit_answer"),
-                None)
+                (call for call in calls if not kept and call.get("name") == "submit_answer"), None
+            )
             if selected is None:
                 continue
             kept = True
@@ -242,25 +239,33 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
             )
         return ModelResponse(result=result, structured_response=response.structured_response)
 
-    async def awrap_model_call(self, request: ModelRequest[Any],
-                               handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]]) -> ModelResponse[Any]:
+    async def awrap_model_call(
+        self,
+        request: ModelRequest[Any],
+        handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
+    ) -> ModelResponse[Any]:
         raw_handler = handler
 
         async def guarded(inner: ModelRequest[Any]) -> ModelResponse[Any]:
             allowed = {
                 str((item.get("function") or item).get("name", ""))
-                if isinstance(item, Mapping) else str(getattr(item, "name", ""))
+                if isinstance(item, Mapping)
+                else str(getattr(item, "name", ""))
                 for item in inner.tools
             }
             result = await raw_handler(inner)
             if set(self._tool_names(result)) <= allowed:
                 return result
-            prompt = HumanMessage(content=(
-                "Your preceding response requested an unavailable tool. Retry once using "
-                "only tools displayed in this request. Do not invent or reuse a hidden tool."
-            ))
-            retry = inner.override(messages=[*inner.messages, prompt],
-                                   model_settings={**inner.model_settings, "max_completion_tokens": 800})
+            prompt = HumanMessage(
+                content=(
+                    "Your preceding response requested an unavailable tool. Retry once using "
+                    "only tools displayed in this request. Do not invent or reuse a hidden tool."
+                )
+            )
+            retry = inner.override(
+                messages=[*inner.messages, prompt],
+                model_settings={**inner.model_settings, "max_completion_tokens": 800},
+            )
             result = await raw_handler(retry)
             if not set(self._tool_names(result)) <= allowed:
                 raise RuntimeError("the Deep Agent requested an unavailable tool after correction")
@@ -280,16 +285,14 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
                     *request.messages,
                     HumanMessage(content=typed_submission_correction(request.tools, response, error)),
                 ],
-                tools=[
-                    item
-                    for item in request.tools
-                    if getattr(item, "name", None) == "submit_answer"
-                ],
+                tools=[item for item in request.tools if getattr(item, "name", None) == "submit_answer"],
                 tool_choice=None,
                 model_settings={**request.model_settings, "max_completion_tokens": 800},
             )
         )
-        if self._tool_names(repaired) != ["submit_answer"] or submission_validation_error(request.tools, repaired.result):
+        if self._tool_names(repaired) != ["submit_answer"] or submission_validation_error(
+            request.tools, repaired.result
+        ):
             raise RuntimeError("the Deep Agent did not produce a valid typed final submission")
         return repaired
 
@@ -299,24 +302,17 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
         handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
     ) -> ModelResponse[Any]:
         completed_tools = (
-            {
-                record.identity.tool
-                for record in self.collector.records.values()
-                if record.result is not None
-            }
+            {record.identity.tool for record in self.collector.records.values() if record.result is not None}
             if self.collector is not None
             else set()
         )
         evidence_complete = (
             self.selected_skill == "market-dislocation"
-            and {"get_price_context", "detect_market_shock", "search_news"}
-            <= completed_tools
+            and {"get_price_context", "detect_market_shock", "search_news"} <= completed_tools
         )
         if evidence_complete:
             submission_tools = [
-                item
-                for item in request.tools
-                if getattr(item, "name", None) == "submit_answer"
+                item for item in request.tools if getattr(item, "name", None) == "submit_answer"
             ]
             if len(submission_tools) != 1:
                 raise RuntimeError("the typed answer tool is unavailable")
@@ -361,11 +357,7 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
                             )
                         ),
                     ],
-                    tools=[
-                        item
-                        for item in request.tools
-                        if getattr(item, "name", None) == "read_file"
-                    ],
+                    tools=[item for item in request.tools if getattr(item, "name", None) == "read_file"],
                     tool_choice=None,
                     model_settings={**request.model_settings, "max_completion_tokens": 800},
                 )
@@ -396,9 +388,7 @@ class RequireAnswerSubmissionMiddleware(AgentMiddleware[Any, Any, Any]):
         )
         settings = {**request.model_settings, "max_completion_tokens": 800}
         repaired = await handler(
-            request.override(
-                messages=messages, tool_choice=None, model_settings=settings
-            )
+            request.override(messages=messages, tool_choice=None, model_settings=settings)
         )
         repaired_names = self._tool_names(repaired)
         if repaired_names == ["submit_answer"]:
@@ -422,22 +412,14 @@ def _attempt_progress(attempt: ModelAttempt) -> dict[str, Any]:
 def _relay_outside_switchyard(middleware: list[Any]) -> list[Any]:
     """Keep Relay immediately outside its narrow Switchyard compatibility shim."""
     ordered = list(middleware)
-    relay = next(
-        item for item in ordered if isinstance(item, NemoRelayDeepAgentsMiddleware)
-    )
-    compatibility = next(
-        item for item in ordered if isinstance(item, RelayHeaderCompatibilityMiddleware)
-    )
-    submission = next(
-        item for item in ordered if isinstance(item, RequireAnswerSubmissionMiddleware)
-    )
+    relay = next(item for item in ordered if isinstance(item, NemoRelayDeepAgentsMiddleware))
+    compatibility = next(item for item in ordered if isinstance(item, RelayHeaderCompatibilityMiddleware))
+    submission = next(item for item in ordered if isinstance(item, RequireAnswerSubmissionMiddleware))
     ordered.remove(relay)
     ordered.remove(compatibility)
     ordered.remove(submission)
     switchyard_index = next(
-        index
-        for index, item in enumerate(ordered)
-        if isinstance(item, SwitchyardRoutingMiddleware)
+        index for index, item in enumerate(ordered) if isinstance(item, SwitchyardRoutingMiddleware)
     )
     ordered[switchyard_index:switchyard_index] = [submission, relay, compatibility]
     return ordered

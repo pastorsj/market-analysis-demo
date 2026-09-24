@@ -74,7 +74,9 @@ class RelayTracingSettings:
             if endpoint.scheme not in {"http", "https"} or not endpoint.netloc:
                 raise RelayTracingConfigurationError("LangSmith OTLP endpoint must be an HTTP(S) URL")
             if endpoint.username or endpoint.password or endpoint.query or endpoint.fragment:
-                raise RelayTracingConfigurationError("LangSmith OTLP endpoint must not contain credentials or a query")
+                raise RelayTracingConfigurationError(
+                    "LangSmith OTLP endpoint must not contain credentials or a query"
+                )
 
     @classmethod
     def from_env(cls, environment: Mapping[str, str] | None = None) -> RelayTracingSettings:
@@ -82,9 +84,7 @@ class RelayTracingSettings:
 
         values = os.environ if environment is None else environment
         return cls(
-            trace_directory=Path(
-                values.get("NEMO_RELAY_TRACE_DIRECTORY", str(DEFAULT_TRACE_DIRECTORY))
-            ),
+            trace_directory=Path(values.get("NEMO_RELAY_TRACE_DIRECTORY", str(DEFAULT_TRACE_DIRECTORY))),
             trace_filename=values.get("NEMO_RELAY_TRACE_FILENAME", DEFAULT_TRACE_FILENAME),
             langsmith_enabled=_enabled(
                 values.get("NEMO_RELAY_LANGSMITH_ENABLED"),
@@ -167,7 +167,9 @@ class RelayTracing:
             ]
             if missing:
                 names = ", ".join(missing)
-                raise RelayTracingConfigurationError(f"LangSmith export requires environment variable(s): {names}")
+                raise RelayTracingConfigurationError(
+                    f"LangSmith export requires environment variable(s): {names}"
+                )
         self.settings.trace_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         activation = await plugin.initialize(_build_plugin_config(self.settings))
         self._activation = activation

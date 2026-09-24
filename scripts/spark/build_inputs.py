@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import shlex
 import stat
-from typing import Iterable
+from collections.abc import Iterable
 
 
 SCHEMA_VERSION = "market-shock-build-input-v1"
@@ -23,7 +23,16 @@ CONTEXTS = {
     "tools": Path("services/tools"),
 }
 FILES = {
-    "web": (".dockerignore", "Dockerfile", "index.html", "nginx.conf", "package.json", "pnpm-lock.yaml", "tsconfig.json", "vite.config.ts"),
+    "web": (
+        ".dockerignore",
+        "Dockerfile",
+        "index.html",
+        "nginx.conf",
+        "package.json",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "vite.config.ts",
+    ),
     "agent": (".dockerignore", "Dockerfile", "pyproject.toml"),
     "tools": (".dockerignore", "Dockerfile", "pyproject.toml"),
 }
@@ -33,11 +42,27 @@ DIRECTORIES = {
     "tools": ("src",),
 }
 COPY_SOURCES = {
-    "web": ("package.json", "pnpm-lock.yaml", "index.html", "tsconfig.json", "vite.config.ts", "src", "nginx.conf"),
+    "web": (
+        "package.json",
+        "pnpm-lock.yaml",
+        "index.html",
+        "tsconfig.json",
+        "vite.config.ts",
+        "src",
+        "nginx.conf",
+    ),
     "agent": ("pyproject.toml", "src", "skills"),
     "tools": ("pyproject.toml", "src"),
 }
-IGNORED_PARTS = {"__pycache__", ".pytest_cache", ".venv", "node_modules", "dist", "test-results", "playwright-report"}
+IGNORED_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".venv",
+    "node_modules",
+    "dist",
+    "test-results",
+    "playwright-report",
+}
 
 
 class BuildInputError(ValueError):
@@ -62,8 +87,13 @@ def _read_regular_bytes(path: Path, service: str, relative: str) -> tuple[os.sta
     except OSError as exc:
         raise BuildInputError(f"unreadable build input: {service}/{relative}") from exc
     identity = lambda item: (
-        item.st_dev, item.st_ino, item.st_mode, item.st_nlink,
-        item.st_size, item.st_mtime_ns, item.st_ctime_ns,
+        item.st_dev,
+        item.st_ino,
+        item.st_mode,
+        item.st_nlink,
+        item.st_size,
+        item.st_mtime_ns,
+        item.st_ctime_ns,
     )
     if identity(before) != identity(after) or identity(after) != identity(bound):
         raise BuildInputError(f"changed build input: {service}/{relative}")
@@ -163,16 +193,20 @@ def service_build_input_manifest(root: Path, service: str) -> dict[str, object]:
             raise BuildInputError(f"duplicate build input: {service}/{relative}")
         seen.add(relative)
         info, raw = _read_regular_bytes(path, service, relative)
-        rows.append({
-            "path": relative,
-            "mode": f"{stat.S_IMODE(info.st_mode):04o}",
-            "bytes": len(raw),
-            "sha256": hashlib.sha256(raw).hexdigest(),
-        })
+        rows.append(
+            {
+                "path": relative,
+                "mode": f"{stat.S_IMODE(info.st_mode):04o}",
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        )
     if len(rows) < len(FILES[service]) + len(DIRECTORIES[service]):
         raise BuildInputError(f"incomplete build input: {service}")
     directories = []
-    for path in sorted(_directory_paths(context, service), key=lambda item: item.relative_to(context).as_posix()):
+    for path in sorted(
+        _directory_paths(context, service), key=lambda item: item.relative_to(context).as_posix()
+    ):
         relative = path.relative_to(context).as_posix()
         try:
             info = path.lstat()
@@ -187,7 +221,12 @@ def service_build_input_manifest(root: Path, service: str) -> dict[str, object]:
 
 def service_build_input_digest(root: Path, service: str) -> str:
     manifest = service_build_input_manifest(root, service)
-    raw = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode() + b"\n"
+    raw = (
+        json.dumps(
+            manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        ).encode()
+        + b"\n"
+    )
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -231,7 +270,9 @@ def create_build_snapshot(root: Path, destination: Path) -> dict[str, str]:
                 target.chmod(int(row["mode"], 8))
             except OSError as exc:
                 raise BuildInputError(f"snapshot write failed: {service}/{relative}") from exc
-        for relative, mode in sorted(directory_modes.items(), key=lambda item: (-item[0].count("/"), item[0])):
+        for relative, mode in sorted(
+            directory_modes.items(), key=lambda item: (-item[0].count("/"), item[0])
+        ):
             (target_context / relative).chmod(mode)
     snapshot = build_input_digests(destination)
     after = build_input_digests(root)
@@ -257,9 +298,24 @@ def main() -> int:
     if args.service:
         print(service_build_input_digest(args.root, args.service))
     elif args.snapshot_root:
-        print(json.dumps({"schema_version": SCHEMA_VERSION, "services": create_build_snapshot(args.root, args.snapshot_root)}, sort_keys=True, separators=(",", ":")))
+        print(
+            json.dumps(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "services": create_build_snapshot(args.root, args.snapshot_root),
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
     else:
-        print(json.dumps({"schema_version": SCHEMA_VERSION, "services": build_input_digests(args.root)}, sort_keys=True, separators=(",", ":")))
+        print(
+            json.dumps(
+                {"schema_version": SCHEMA_VERSION, "services": build_input_digests(args.root)},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
     return 0
 
 

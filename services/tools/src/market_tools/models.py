@@ -47,7 +47,7 @@ class ExecutionReceipt(StrictModel):
     document_readiness_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
     @model_validator(mode="after")
-    def execution_is_truthful(self) -> "ExecutionReceipt":
+    def execution_is_truthful(self) -> ExecutionReceipt:
         if self.gpu_executed != (self.engine != "deterministic"):
             raise ValueError("engine and gpu_executed disagree")
         return self
@@ -62,8 +62,13 @@ class Artifact(StrictModel):
 
 class CoverageItem(StrictModel):
     dimension: Literal[
-        "instrument", "market_window", "documents", "analogue_candidates",
-        "graph_paths", "risk_model", "projection_documents",
+        "instrument",
+        "market_window",
+        "documents",
+        "analogue_candidates",
+        "graph_paths",
+        "risk_model",
+        "projection_documents",
     ]
     key: str = Field(min_length=1, max_length=160, pattern=r"^[A-Za-z0-9_.:/@+\-]+$")
     status: Literal["available", "partial", "missing"]
@@ -72,7 +77,7 @@ class CoverageItem(StrictModel):
     expected_count: int | None = Field(default=None, ge=1, le=1_000_000)
 
     @model_validator(mode="after")
-    def count_matches_status(self) -> "CoverageItem":
+    def count_matches_status(self) -> CoverageItem:
         if self.status == "missing" and self.observed_count != 0:
             raise ValueError("missing coverage cannot have observations")
         if self.status == "available" and self.observed_count == 0:
@@ -83,16 +88,21 @@ class CoverageItem(StrictModel):
 class ToolLimitation(StrictModel):
     code: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_]*$")
     message: str = Field(min_length=1, max_length=500)
-    affected: Annotated[
-        list[Annotated[str, Field(min_length=1, max_length=160)]], Field(max_length=20)
-    ] = Field(default_factory=list)
+    affected: Annotated[list[Annotated[str, Field(min_length=1, max_length=160)]], Field(max_length=20)] = (
+        Field(default_factory=list)
+    )
 
 
 class ToolResult(StrictModel):
     schema_version: Literal["2.0"] = "2.0"
     tool: Literal[
-        "detect_market_shock", "get_price_context", "search_news", "find_historical_analogues",
-        "trace_shock_propagation", "predict_volatility_risk", "project_news_topics",
+        "detect_market_shock",
+        "get_price_context",
+        "search_news",
+        "find_historical_analogues",
+        "trace_shock_propagation",
+        "predict_volatility_risk",
+        "project_news_topics",
     ]
     as_of: datetime
     outcome: Literal["ok", "partial", "no_data"]
@@ -106,12 +116,13 @@ class ToolResult(StrictModel):
     warnings: Annotated[list[str], Field(max_length=20)] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def outcome_is_consistent(self) -> "ToolResult":
+    def outcome_is_consistent(self) -> ToolResult:
         unavailable = [item for item in self.coverage if item.status != "available"]
         if self.outcome == "ok" and (unavailable or self.limitations):
             raise ValueError("ok outcome requires complete coverage and no limitations")
         if self.outcome == "partial" and (
-            not unavailable or not self.limitations
+            not unavailable
+            or not self.limitations
             or not any(item.status != "missing" for item in self.coverage)
         ):
             raise ValueError("partial outcome requires usable incomplete coverage")
@@ -123,7 +134,9 @@ class ToolResult(StrictModel):
             raise ValueError("no_data requires a missing prerequisite and no artifacts")
         evidence_ids = [item.evidence_id for item in self.evidence]
         citation_evidence = [item.evidence_id for item in self.citations]
-        if len(evidence_ids) != len(set(evidence_ids)) or len(citation_evidence) != len(set(citation_evidence)):
+        if len(evidence_ids) != len(set(evidence_ids)) or len(citation_evidence) != len(
+            set(citation_evidence)
+        ):
             raise ValueError("evidence and citation identities must be unique")
         if set(citation_evidence) != set(evidence_ids):
             raise ValueError("every evidence item requires exactly one citation")

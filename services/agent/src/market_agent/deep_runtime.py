@@ -44,7 +44,13 @@ from .deep_middleware import (
     _relay_outside_switchyard,
 )
 from .deep_reports import finalize_answer
-from .deep_skills import MARKET_ESCALATION_PROMPT, ScopedSkillsBackend, _prompt, _required_tools, _select_skill
+from .deep_skills import (
+    MARKET_ESCALATION_PROMPT,
+    ScopedSkillsBackend,
+    _prompt,
+    _required_tools,
+    _select_skill,
+)
 from .evidence import EvidenceExecutor
 from .event_catalog import resolve_bound_policy
 from .policy import resolve_policy
@@ -74,9 +80,7 @@ class _TracedTerminalFailure(RuntimeError):
 # provide specialization, while every model turn stays on Relay + Switchyard.
 register_harness_profile(
     f"openai:{LOCAL_MODEL}",
-    HarnessProfile(
-        general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)
-    ),
+    HarnessProfile(general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)),
 )
 
 
@@ -98,9 +102,7 @@ class MarketDeepAgent:
             self.checkpointer,
             self.event_catalog,
         ) = (settings, catalog, executor, checkpointer, event_catalog)
-        self.skill_registry: SkillRegistry = load_skill_registry(
-            Path(settings.skills_root)
-        )
+        self.skill_registry: SkillRegistry = load_skill_registry(Path(settings.skills_root))
         common = {
             "max_retries": 0,
             "timeout": 120,
@@ -126,15 +128,19 @@ class MarketDeepAgent:
             }
             self.judge = ChatOpenAI(model=LUNA_MODEL, **remote)
             self.capable = ChatOpenAI(model=CAPABLE_MODEL, **{**remote, "max_completion_tokens": 4096})
-            presentation_skill = self.skill_registry.render_prompt(
-                ("report-presentation",)
-            )
+            presentation_skill = self.skill_registry.render_prompt(("report-presentation",))
             # Layout is a bounded structural plan, not another research pass.
             # Keep Ultra's research reasoning enabled; disable it only here.
-            layout_model = self.capable.model_copy(update={
-                "extra_body": {"chat_template_kwargs": {"enable_thinking": False, "force_nonempty_content": True}},
-                "max_tokens": 512, "temperature": 0, "model_kwargs": {"seed": 42},
-            })
+            layout_model = self.capable.model_copy(
+                update={
+                    "extra_body": {
+                        "chat_template_kwargs": {"enable_thinking": False, "force_nonempty_content": True}
+                    },
+                    "max_tokens": 512,
+                    "temperature": 0,
+                    "model_kwargs": {"seed": 42},
+                }
+            )
             self.presenter = ReportPresenter(layout_model, presentation_skill)
             self.routing_algorithm = algorithms.llm_classifier(
                 LlmClassifierConfig.escalation(
@@ -203,15 +209,13 @@ class MarketDeepAgent:
         normalized = (
             request.model_copy(update={"route_mode": "switchyard_escalation"})
             if isinstance(request, InvestigationRequest)
-            else InvestigationRequest(
-                question=request.question, route_mode="switchyard_escalation"
-            )
+            else InvestigationRequest(question=request.question, route_mode="switchyard_escalation")
         )
-        decision = resolve_bound_policy(
-            normalized, self.catalog, self.event_catalog, recorder=recorder
-        )
+        decision = resolve_bound_policy(normalized, self.catalog, self.event_catalog, recorder=recorder)
         if resolved_scope is not None and not normalized.event_id:
-            decision = resolve_policy(normalized, self.catalog, _comparison_members=resolved_scope.resolved_tickers)
+            decision = resolve_policy(
+                normalized, self.catalog, _comparison_members=resolved_scope.resolved_tickers
+            )
             # The API already resolved anaphoric follow-ups against stored scope;
             # parsing its primary-only request again must not discard the peers.
             known = set(
@@ -225,12 +229,9 @@ class MarketDeepAgent:
                 or resolved_scope.as_of != decision.scope.as_of
                 or resolved_scope.status != decision.scope.status
                 or not set(resolved_scope.resolved_tickers) <= known
-                or not set(decision.scope.resolved_tickers)
-                <= set(resolved_scope.resolved_tickers)
+                or not set(decision.scope.resolved_tickers) <= set(resolved_scope.resolved_tickers)
             ):
-                raise ValueError(
-                    "resolved scope does not match the current policy boundary"
-                )
+                raise ValueError("resolved scope does not match the current policy boundary")
             decision = replace(decision, scope=resolved_scope)
         selected_skill = _select_skill(decision, prior_skill)
         base = {
@@ -257,7 +258,11 @@ class MarketDeepAgent:
             }
         skill = self.skill_registry[selected_skill]
         collector = EvidenceCollector(
-            self.executor, decision, recorder, progress, selected_skill,
+            self.executor,
+            decision,
+            recorder,
+            progress,
+            selected_skill,
             _required_tools(selected_skill, skill.required_tools, decision.request.question),
         )
         observer = RoutedCallObserver(recorder, progress)
@@ -289,9 +294,7 @@ class MarketDeepAgent:
                 paths=[f"/skills/{selected_skill}/**"],
                 mode="allow",
             ),
-            FilesystemPermission(
-                operations=["read", "write"], paths=["/**"], mode="deny"
-            ),
+            FilesystemPermission(operations=["read", "write"], paths=["/**"], mode="deny"),
         ]
         skill_reader_description = f"Read the complete selected skill only from /skills/{selected_skill}/SKILL.md with limit=1000. Never read a directory, batch files, or repeat the skill read."
 
@@ -301,7 +304,9 @@ class MarketDeepAgent:
                 # skill metadata is intentionally not rendered: this runtime
                 # selects a fresh scoped skill for every conversation turn.
                 SkillsMiddleware(
-                    backend=backend, sources=["/skills/"], system_prompt=None,
+                    backend=backend,
+                    sources=["/skills/"],
+                    system_prompt=None,
                 ),
                 FilesystemMiddleware(
                     backend=backend,
@@ -316,14 +321,21 @@ class MarketDeepAgent:
             ]
 
         evidence_tools_by_name = {item.name: item for item in _tools(collector)}
-        evidence_tools = [evidence_tools_by_name[name] for name in skill.allowed_tools
-                          if name != "search_news" or selected_skill not in {"market-dislocation", "peer-comparison"} or name in collector.required_tools]
+        evidence_tools = [
+            evidence_tools_by_name[name]
+            for name in skill.allowed_tools
+            if name != "search_news"
+            or selected_skill not in {"market-dislocation", "peer-comparison"}
+            or name in collector.required_tools
+        ]
         parent_tools = [*evidence_tools, _submission_tool(submission, decision)]
         agent_kwargs = add_nemo_relay_integration(
             model=self.efficient,
             tools=parent_tools,
             system_prompt=_prompt(
-                decision, selected_skill, self.catalog,
+                decision,
+                selected_skill,
+                self.catalog,
                 remote_enabled=self.settings.remote_enabled,
             ),
             middleware=middleware(),
@@ -334,9 +346,7 @@ class MarketDeepAgent:
             checkpointer=self.checkpointer,
             name="market-investigator",
         )
-        agent_kwargs["middleware"] = _relay_outside_switchyard(
-            agent_kwargs["middleware"]
-        )
+        agent_kwargs["middleware"] = _relay_outside_switchyard(agent_kwargs["middleware"])
         agent = create_deep_agent(**agent_kwargs)
         thread_id = f"market-agent:{investigation_id}"
         config = {
@@ -348,9 +358,7 @@ class MarketDeepAgent:
             "recursion_limit": 64,
         }
         try:
-            messages: list[object] = [
-                {"role": "user", "content": decision.request.question}
-            ]
+            messages: list[object] = [{"role": "user", "content": decision.request.question}]
             if fresh_checkpoint:
                 messages.insert(0, RemoveMessage(id=REMOVE_ALL_MESSAGES))
             await agent.ainvoke({"messages": messages}, config=config)
@@ -363,9 +371,7 @@ class MarketDeepAgent:
                 failed_plan, failed_run = None, None
             return {
                 **base,
-                "model_attempts": [
-                    item.model_dump(mode="json") for item in observer.attempts
-                ],
+                "model_attempts": [item.model_dump(mode="json") for item in observer.attempts],
                 "plan": failed_plan.model_dump(mode="json") if failed_plan else None,
                 "evidence": failed_run.model_dump(mode="json") if failed_run else None,
                 "terminal": "synthesis_failure",
@@ -378,9 +384,7 @@ class MarketDeepAgent:
                 failed_plan, failed_run = None, None
             state = {
                 **base,
-                "model_attempts": [
-                    item.model_dump(mode="json") for item in observer.attempts
-                ],
+                "model_attempts": [item.model_dump(mode="json") for item in observer.attempts],
                 "plan": failed_plan.model_dump(mode="json") if failed_plan else None,
                 "evidence": failed_run.model_dump(mode="json") if failed_run else None,
             }

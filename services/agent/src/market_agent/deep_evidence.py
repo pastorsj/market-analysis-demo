@@ -7,7 +7,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import timezone
+from datetime import UTC
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
@@ -35,9 +35,9 @@ def _plan(calls: tuple[PlannedCall, ...], members: tuple[str, ...]) -> EvidenceP
     material = [item.model_dump(mode="json") for item in calls]
     plan_id = (
         "plan-"
-        + hashlib.sha256(
-            json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()[:16]
+        + hashlib.sha256(json.dumps(material, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[
+            :16
+        ]
     )
     return EvidencePlan(
         plan_id=plan_id,
@@ -61,10 +61,7 @@ def _compact_value(value: Any, *, depth: int = 0) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, Mapping):
-        return {
-            str(key): _compact_value(item, depth=depth + 1)
-            for key, item in list(value.items())[:24]
-        }
+        return {str(key): _compact_value(item, depth=depth + 1) for key, item in list(value.items())[:24]}
     if isinstance(value, (list, tuple)):
         return [_compact_value(item, depth=depth + 1) for item in value[:12]]
     return str(value)[:800]
@@ -76,15 +73,9 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
     presented_data = dict(data)
     if result.get("tool") == "find_historical_analogues":
         contract = data.get("feature_contract")
-        ranked = (
-            contract.get("ranked_features") if isinstance(contract, Mapping) else None
-        )
+        ranked = contract.get("ranked_features") if isinstance(contract, Mapping) else None
         if isinstance(ranked, list):
-            specs = {
-                str(item.get("name")): item
-                for item in ranked
-                if isinstance(item, Mapping)
-            }
+            specs = {str(item.get("name")): item for item in ranked if isinstance(item, Mapping)}
             absolute = specs.get("absolute_return_pct")
             volume = specs.get("volume_ratio")
             if absolute and volume:
@@ -110,11 +101,7 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
                 if isinstance(analogues, list)
                 else set()
             )
-            candidates = (
-                next(iter(candidate_directions))
-                if len(candidate_directions) == 1
-                else "mixed"
-            )
+            candidates = next(iter(candidate_directions)) if len(candidate_directions) == 1 else "mixed"
             presented_data["direction_contract_summary"] = (
                 f"Target direction is {target.get('signed_direction')}; candidate "
                 f"direction is {candidates}; {direction.get('match_count')} of "
@@ -127,9 +114,7 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
         for item in result.get("evidence", ())
         if isinstance(item, Mapping) and item.get("evidence_id")
     }
-    citations = [
-        item for item in result.get("citations", ()) if isinstance(item, Mapping)
-    ]
+    citations = [item for item in result.get("citations", ()) if isinstance(item, Mapping)]
     if result.get("tool") == "find_historical_analogues":
         target = data.get("target_features")
         target_id = target.get("evidence_id") if isinstance(target, Mapping) else None
@@ -141,7 +126,9 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
                     (
                         0
                         if item[1].get("source_type") == "model"
-                        else 1 if item[1].get("evidence_id") == target_id else 2
+                        else 1
+                        if item[1].get("evidence_id") == target_id
+                        else 2
                     ),
                     item[0],
                 ),
@@ -156,9 +143,7 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
                 "source_type": citation.get("source_type"),
                 "published_at": citation.get("published_at"),
                 "excerpt": _compact_value(citation.get("excerpt")),
-                "values": _compact_value(
-                    evidence.get(str(citation.get("evidence_id")), {})
-                ),
+                "values": _compact_value(evidence.get(str(citation.get("evidence_id")), {})),
             }
         )
     references = []
@@ -172,8 +157,14 @@ def _agent_evidence_view(result: Mapping[str, Any]) -> dict[str, Any]:
                     source["values"].pop(key, None)
     if result.get("tool") == "search_news" and isinstance(data.get("matches"), list):
         presented_data["matches"] = [
-            next(({"citation_id": citation_id} for original, citation_id in references
-                  if match == original and _compact_value(match, depth=2) == match), match)
+            next(
+                (
+                    {"citation_id": citation_id}
+                    for original, citation_id in references
+                    if match == original and _compact_value(match, depth=2) == match
+                ),
+                match,
+            )
             for match in data["matches"]
         ]
     if "summary" in presented_data and presented_data["summary"] == data.get("summary"):
@@ -209,13 +200,8 @@ class EvidenceCollector:
         scope = self.decision.scope
         return scope.resolved_tickers or ((scope.ticker,) if scope.ticker else ())
 
-    async def call(
-        self, name: str, ticker: str, **arguments: str | int
-    ) -> dict[str, Any]:
-        if (
-            self.decision.kind != PolicyKind.SUPPORTED
-            or self.decision.scope.as_of is None
-        ):
+    async def call(self, name: str, ticker: str, **arguments: str | int) -> dict[str, Any]:
+        if self.decision.kind != PolicyKind.SUPPORTED or self.decision.scope.as_of is None:
             return {
                 "outcome": "blocked",
                 "message": "Evidence tools require a resolved supported ticker and cutoff.",
@@ -245,17 +231,11 @@ class EvidenceCollector:
                     "comparison coverage. Do not invent results for excluded members."
                 ),
             }
-        cutoff = (
-            self.decision.scope.as_of.astimezone(timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
+        cutoff = self.decision.scope.as_of.astimezone(UTC).isoformat().replace("+00:00", "Z")
         if self.decision.request.event_id and name not in {"search_news", "project_news_topics"}:
-            cutoff = self.decision.scope.market_as_of.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            cutoff = self.decision.scope.market_as_of.astimezone(UTC).isoformat().replace("+00:00", "Z")
         try:
-            call = PlannedCall(
-                tool=name, arguments={"ticker": ticker, "as_of": cutoff, **arguments}
-            )
+            call = PlannedCall(tool=name, arguments={"ticker": ticker, "as_of": cutoff, **arguments})
         except Exception:
             self.recorder.violation("mcp", "unapproved_tool")
             return {
@@ -305,15 +285,11 @@ class EvidenceCollector:
         calls = tuple(unique.values())
         plan = _plan(calls, self.members)
         ordered = tuple(
-            self.records[hashlib.sha256(item.model_dump_json().encode()).hexdigest()]
-            for item in calls
+            self.records[hashlib.sha256(item.model_dump_json().encode()).hexdigest()] for item in calls
         )
         limitations = {item.model_dump_json(): item for item in self.limitations}
         incomplete = any(
-            item.status == "tool_failed"
-            or item.result
-            and item.result["outcome"] != "ok"
-            for item in ordered
+            item.status == "tool_failed" or item.result and item.result["outcome"] != "ok" for item in ordered
         )
         return plan, EvidenceRun(
             plan_id=plan.plan_id,
@@ -338,7 +314,9 @@ def _tools(collector: EvidenceCollector) -> list[BaseTool]:
     async def search_news(ticker: str, query: str, top_k: int = 5) -> dict[str, Any]:
         """Search cutoff-qualified stored news, filings, and releases for an in-scope ticker."""
         bounded_news = getattr(collector, "selected_skill", None) in {
-            "market-dislocation", "peer-comparison", "shock-propagation",
+            "market-dislocation",
+            "peer-comparison",
+            "shock-propagation",
         }
         normalized_query = (
             collector.decision.request.question
@@ -346,25 +324,17 @@ def _tools(collector: EvidenceCollector) -> list[BaseTool]:
             else " ".join(query.split())[:500] or collector.decision.request.question
         )
         bounded_top_k = 5 if bounded_news else max(1, min(top_k, 10))
-        return await collector.call(
-            "search_news", ticker, query=normalized_query, top_k=bounded_top_k
-        )
+        return await collector.call("search_news", ticker, query=normalized_query, top_k=bounded_top_k)
 
     @tool
     async def find_historical_analogues(ticker: str, top_k: int = 5) -> dict[str, Any]:
         """Find similar historical market episodes for an in-scope ticker."""
-        return await collector.call(
-            "find_historical_analogues", ticker, top_k=5
-        )
+        return await collector.call("find_historical_analogues", ticker, top_k=5)
 
     @tool
-    async def trace_shock_propagation(
-        ticker: str, max_depth: int = 2
-    ) -> dict[str, Any]:
+    async def trace_shock_propagation(ticker: str, max_depth: int = 2) -> dict[str, Any]:
         """Trace bounded relationship paths through the validated market graph."""
-        return await collector.call(
-            "trace_shock_propagation", ticker, max_depth=2
-        )
+        return await collector.call("trace_shock_propagation", ticker, max_depth=2)
 
     @tool
     async def predict_volatility_risk(ticker: str) -> dict[str, Any]:

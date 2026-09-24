@@ -24,21 +24,42 @@ from scripts.data.event_contract import EventContractError, validate_prepared_ca
 DIGEST = re.compile(r"[0-9a-f]{64}")
 ARTIFACT_ID = re.compile(r"shock-events-[0-9a-f]{16}")
 MANIFEST_FIELDS = {
-    "schema_version", "artifact_kind", "artifact_id", "catalog_id",
-    "catalog_sha256", "schema_sha256", "binding", "summary", "artifacts",
+    "schema_version",
+    "artifact_kind",
+    "artifact_id",
+    "catalog_id",
+    "catalog_sha256",
+    "schema_sha256",
+    "binding",
+    "summary",
+    "artifacts",
 }
 BINDING_FIELDS = {
-    "scenario_id", "scenario_manifest_sha256", "market_snapshot_id",
-    "market_manifest_sha256", "document_snapshot_id",
+    "scenario_id",
+    "scenario_manifest_sha256",
+    "market_snapshot_id",
+    "market_manifest_sha256",
+    "document_snapshot_id",
     "document_manifest_sha256",
 }
 SUMMARY_FIELDS = {
-    "declared_events", "published_events", "ready_events", "partial_events",
+    "declared_events",
+    "published_events",
+    "ready_events",
+    "partial_events",
     "excluded_events",
 }
 CATALOG_FIELDS = {
-    "schema_version", "artifact_id", "catalog_id", "calendar", "timezone",
-    "binding", "categories", "events", "excluded_events", "summary",
+    "schema_version",
+    "artifact_id",
+    "catalog_id",
+    "calendar",
+    "timezone",
+    "binding",
+    "categories",
+    "events",
+    "excluded_events",
+    "summary",
 }
 
 
@@ -55,15 +76,19 @@ def _stable_bytes(path: Path, maximum: int, code: str) -> bytes:
     try:
         before = path.lstat()
         _need(
-            stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-            and 0 < before.st_size <= maximum,
+            stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and 0 < before.st_size <= maximum,
             code,
         )
         body = path.read_bytes()
         after = path.lstat()
         identity = lambda value: (
-            value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
-            value.st_size, value.st_mtime_ns, value.st_ctime_ns,
+            value.st_dev,
+            value.st_ino,
+            value.st_mode,
+            value.st_nlink,
+            value.st_size,
+            value.st_mtime_ns,
+            value.st_ctime_ns,
         )
         _need(len(body) == before.st_size and identity(before) == identity(after), code)
         return body
@@ -93,7 +118,10 @@ def _sha256(body: bytes) -> str:
 
 def _canonical(value: Any) -> bytes:
     return json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     ).encode("utf-8")
 
 
@@ -121,10 +149,14 @@ def _scenario_binding(scenario_root: Path) -> dict[str, str]:
         "event_scenario_binding",
     )
     _need(
-        all(DIGEST.fullmatch(binding[key]) for key in (
-            "scenario_manifest_sha256", "market_manifest_sha256",
-            "document_manifest_sha256",
-        )),
+        all(
+            DIGEST.fullmatch(binding[key])
+            for key in (
+                "scenario_manifest_sha256",
+                "market_manifest_sha256",
+                "document_manifest_sha256",
+            )
+        ),
         "event_scenario_binding",
     )
     return binding
@@ -164,23 +196,32 @@ def verify_binding(
     _need(
         all(type(value) is int and value >= 0 for value in summary.values())
         and summary["published_events"] <= summary["declared_events"]
-        and summary["published_events"] + summary["excluded_events"]
-        == summary["declared_events"]
-        and summary["ready_events"] + summary["partial_events"]
-        == summary["published_events"],
+        and summary["published_events"] + summary["excluded_events"] == summary["declared_events"]
+        and summary["ready_events"] + summary["partial_events"] == summary["published_events"],
         "event_summary",
     )
     artifacts = manifest.get("artifacts")
     _need(isinstance(artifacts, list) and len(artifacts) == 1, "event_artifact_record")
     record = artifacts[0]
-    _need(isinstance(record, dict) and set(record) == {
-        "path", "sha256", "bytes", "records", "media_type",
-    }, "event_artifact_record")
+    _need(
+        isinstance(record, dict)
+        and set(record)
+        == {
+            "path",
+            "sha256",
+            "bytes",
+            "records",
+            "media_type",
+        },
+        "event_artifact_record",
+    )
     _need(
         record.get("path") == "catalog.json"
         and DIGEST.fullmatch(str(record.get("sha256", ""))) is not None
-        and type(record.get("bytes")) is int and record["bytes"] > 0
-        and type(record.get("records")) is int and record["records"] >= 0
+        and type(record.get("bytes")) is int
+        and record["bytes"] > 0
+        and type(record.get("records")) is int
+        and record["records"] >= 0
         and record.get("media_type") == "application/json",
         "event_artifact_record",
     )
@@ -196,11 +237,18 @@ def verify_binding(
     except EventContractError as exc:
         code = exc.issues[0].code if exc.issues else "event_artifact_catalog"
         raise EventPublicationError(code) from exc
-    expected_id = "shock-events-" + _sha256(_canonical({
-        "catalog_sha256": catalog_sha,
-        "schema_sha256": schema_sha,
-        "binding": binding,
-    }))[:16]
+    expected_id = (
+        "shock-events-"
+        + _sha256(
+            _canonical(
+                {
+                    "catalog_sha256": catalog_sha,
+                    "schema_sha256": schema_sha,
+                    "binding": binding,
+                }
+            )
+        )[:16]
+    )
     _need(
         expected_id == root.name == payload.get("artifact_id")
         and payload.get("binding") == binding
@@ -233,8 +281,11 @@ def _target(events_root: Path, artifact: Path) -> str:
     except OSError as exc:
         raise EventPublicationError("event_publication_path") from exc
     _need(
-        not events_root.is_symlink() and root.is_dir() and resolved.is_dir()
-        and not artifact.is_symlink() and resolved.parent == expected_parent
+        not events_root.is_symlink()
+        and root.is_dir()
+        and resolved.is_dir()
+        and not artifact.is_symlink()
+        and resolved.parent == expected_parent
         and ARTIFACT_ID.fullmatch(resolved.name) is not None,
         "event_publication_path",
     )
@@ -249,8 +300,7 @@ def _read_current(events_root: Path) -> str | None:
     target = os.readlink(current)
     parts = Path(target).parts
     _need(
-        len(parts) == 2 and parts[0] == "artifacts"
-        and ARTIFACT_ID.fullmatch(parts[1]) is not None,
+        len(parts) == 2 and parts[0] == "artifacts" and ARTIFACT_ID.fullmatch(parts[1]) is not None,
         "event_current_alias",
     )
     return target
@@ -299,7 +349,8 @@ def restore(events_root: Path, prior: str, expected_current: str) -> None:
     if target is not None:
         parts = Path(target).parts
         _need(
-            len(parts) == 2 and parts[0] == "artifacts"
+            len(parts) == 2
+            and parts[0] == "artifacts"
             and ARTIFACT_ID.fullmatch(parts[1]) is not None
             and (events_root / target).resolve(strict=True).parent
             == (events_root / "artifacts").resolve(strict=True),
@@ -310,7 +361,10 @@ def restore(events_root: Path, prior: str, expected_current: str) -> None:
 
 def _paths(args: argparse.Namespace) -> tuple[Path, Path]:
     repository = args.repository_root.resolve()
-    return repository / "data/events/catalog.yaml", repository / "data/schemas/shock-event-catalog.schema.json"
+    return (
+        repository / "data/events/catalog.yaml",
+        repository / "data/schemas/shock-event-catalog.schema.json",
+    )
 
 
 def main() -> int:
@@ -337,7 +391,11 @@ def main() -> int:
             receipt = verify_binding(args.scenario_root, args.event_root, catalog, schema)
         else:
             receipt = publish(
-                args.scenario_root, args.artifact, args.events_root, catalog, schema,
+                args.scenario_root,
+                args.artifact,
+                args.events_root,
+                catalog,
+                schema,
             )
         print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
         return 0

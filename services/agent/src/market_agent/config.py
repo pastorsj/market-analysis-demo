@@ -9,8 +9,13 @@ LUNA_MODEL = "openai/openai/gpt-5.6-luna"
 SOL_MODEL = "openai/openai/gpt-5.6-sol"
 CAPABLE_MODEL = "nvidia/nvidia/nemotron-3-ultra"
 TOOLS = (
-    "detect_market_shock", "get_price_context", "search_news", "find_historical_analogues",
-    "trace_shock_propagation", "predict_volatility_risk", "project_news_topics",
+    "detect_market_shock",
+    "get_price_context",
+    "search_news",
+    "find_historical_analogues",
+    "trace_shock_propagation",
+    "predict_volatility_risk",
+    "project_news_topics",
 )
 
 
@@ -41,13 +46,17 @@ class Settings(BaseModel):
             raise ValueError("unapproved remote model")
         if self.remote_enabled and not all((self.remote_url, self.remote_key, self.remote_model)):
             raise ValueError("complete remote configuration required")
-        if not all(path.is_absolute() for path in (self.state_root, self.scenario_root, self.event_catalog_root, self.skills_root)):
+        if not all(
+            path.is_absolute()
+            for path in (self.state_root, self.scenario_root, self.event_catalog_root, self.skills_root)
+        ):
             raise ValueError("runtime roots must be absolute")
         return self
 
     def load_coverage(self):
         """Load the mounted production catalog through the fail-closed v2 boundary."""
         from .coverage import CoverageCatalog
+
         return CoverageCatalog.load(self.scenario_root, gate=self.data_gate)
 
     @classmethod
@@ -60,7 +69,9 @@ class Settings(BaseModel):
             judge_model=os.getenv("SWITCHYARD_JUDGE_MODEL") or LUNA_MODEL,
             state_root=Path(os.getenv("MARKET_SHOCK_STATE_ROOT", "/srv/market-shock/state")),
             scenario_root=Path(os.getenv("MARKET_SHOCK_SCENARIO_ROOT", "/srv/market-shock/scenario")),
-            event_catalog_root=Path(os.getenv("MARKET_SHOCK_EVENT_CATALOG_ROOT", "/srv/market-shock/events/current")),
+            event_catalog_root=Path(
+                os.getenv("MARKET_SHOCK_EVENT_CATALOG_ROOT", "/srv/market-shock/events/current")
+            ),
             skills_root=Path(os.getenv("MARKET_SHOCK_SKILLS_ROOT", "/opt/market-agent/skills")),
             data_gate=os.getenv("MARKET_SHOCK_DATA_GATE", "reconstruction"),
         )

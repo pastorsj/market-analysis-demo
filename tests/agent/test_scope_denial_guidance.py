@@ -1,6 +1,6 @@
 """Scope denials explain recovery without expanding tool authorization."""
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,7 +14,9 @@ from market_agent.policy import PolicyKind
 @pytest.mark.parametrize("members", [("ALPHA",), ("BETA", "GAMMA"), ("DELTA", "EPSILON", "ZETA")])
 @pytest.mark.parametrize("tool", ["get_price_context", "detect_market_shock"])
 async def test_out_of_scope_denial_names_actual_members_and_recovery(members, tool):
-    scope = SimpleNamespace(resolved_tickers=members, ticker=members[0], as_of=datetime(2024, 6, 7, tzinfo=timezone.utc))
+    scope = SimpleNamespace(
+        resolved_tickers=members, ticker=members[0], as_of=datetime(2024, 6, 7, tzinfo=UTC)
+    )
     decision = SimpleNamespace(kind=PolicyKind.SUPPORTED, scope=scope)
     executor = AsyncMock()
     collector = EvidenceCollector(executor, decision, SimpleNamespace(), AsyncMock(), "peer-comparison")

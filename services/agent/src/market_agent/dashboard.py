@@ -31,13 +31,15 @@ async def get_dashboard(
         value = await request.app.state.market_tool_client.read_dashboard(symbol, requested.isoformat())
         coverage = value["coverage"]
         expected_cutoff = session.close_at.isoformat().replace("+00:00", "Z")
-        if (value["resolved_session"] != session.session_date.isoformat()
-                or value["cutoff_at"] != expected_cutoff
-                or coverage["scenario_id"] != catalog.scenario_id
-                or coverage["first_session"] != catalog.sessions[0].session_date.isoformat()
-                or coverage["last_session"] != catalog.sessions[-1].session_date.isoformat()
-                or coverage["session_count"] != len(catalog.sessions)
-                or coverage["vintage_status"] != catalog.vintage_status):
+        if (
+            value["resolved_session"] != session.session_date.isoformat()
+            or value["cutoff_at"] != expected_cutoff
+            or coverage["scenario_id"] != catalog.scenario_id
+            or coverage["first_session"] != catalog.sessions[0].session_date.isoformat()
+            or coverage["last_session"] != catalog.sessions[-1].session_date.isoformat()
+            or coverage["session_count"] != len(catalog.sessions)
+            or coverage["vintage_status"] != catalog.vintage_status
+        ):
             raise ValueError("dashboard coverage mismatch")
         return value
     except Exception as exc:

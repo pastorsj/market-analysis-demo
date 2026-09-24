@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage
 from openai import LengthFinishReasonError
 
 from .config import CAPABLE_MODEL
+
 # Keep the public presentation API stable while isolating pure layout functions.
 from .presentation_formatting import (
     PRESENTED_ANSWER_MAX as PRESENTED_ANSWER_MAX,
@@ -172,11 +173,14 @@ class ReportPresenter:
             if truncated:
                 completion = source_error.completion
                 usage = completion.usage
-                raw = AIMessage(content="", usage_metadata={
-                    "input_tokens": usage.prompt_tokens if usage else 0,
-                    "output_tokens": usage.completion_tokens if usage else 0,
-                    "total_tokens": usage.total_tokens if usage else 0,
-                })
+                raw = AIMessage(
+                    content="",
+                    usage_metadata={
+                        "input_tokens": usage.prompt_tokens if usage else 0,
+                        "output_tokens": usage.completion_tokens if usage else 0,
+                        "total_tokens": usage.total_tokens if usage else 0,
+                    },
+                )
                 identity_verified = completion.model == CAPABLE_MODEL
             invalid = isinstance(source_error, ValueError) and str(source_error) != "identity_mismatch"
             code = (
@@ -212,7 +216,9 @@ class ReportPresenter:
                     # A schema/plan failure occurs after the provider returned a
                     # verified provider envelope. The network call succeeded even
                     # though the cosmetic application step is invalid.
-                    outcome="succeeded" if identity_verified and code in {"invalid_schema", "finish_length"} else "failed",
+                    outcome="succeeded"
+                    if identity_verified and code in {"invalid_schema", "finish_length"}
+                    else "failed",
                     call_id=call_id,
                     application_request_id=request_id,
                     identity_evidence="direct_provider_verified" if identity_verified else None,
@@ -297,8 +303,7 @@ async def present_adaptively(
             markdown=answer,
             eligibility=eligibility,
             limitation=(
-                "Enhanced report formatting was unavailable; "
-                "the original evidence-grounded answer is shown."
+                "Enhanced report formatting was unavailable; the original evidence-grounded answer is shown."
             ),
         )
     try:
@@ -314,8 +319,7 @@ async def present_adaptively(
             eligibility=eligibility,
             attempt=exc.attempt,
             limitation=(
-                "Enhanced report formatting was unavailable; "
-                "the original evidence-grounded answer is shown."
+                "Enhanced report formatting was unavailable; the original evidence-grounded answer is shown."
             ),
         )
     return AdaptivePresentation(

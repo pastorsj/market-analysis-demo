@@ -5,7 +5,7 @@ Only readiness polling can recover the circuit; user admission never runs a prob
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 import hmac
 import logging
 import secrets
@@ -30,12 +30,14 @@ class GenerationHealth:
 
     @staticmethod
     def _timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
     def acquire_maintenance(self) -> dict[str, str]:
         """Atomically reserve an idle process for one operator procedure."""
         if self.owner is not None or self.checking or self.maintenance is not None:
-            raise HTTPException(status_code=409, detail="The agent is not idle for maintenance.", headers={"Retry-After": "2"})
+            raise HTTPException(
+                status_code=409, detail="The agent is not idle for maintenance.", headers={"Retry-After": "2"}
+            )
         lease_id, token = secrets.token_hex(16), secrets.token_urlsafe(32)
         acquired_at = self._timestamp()
         self.maintenance = {"lease_id": lease_id, "token": token, "acquired_at": acquired_at}
@@ -50,17 +52,33 @@ class GenerationHealth:
     def release_maintenance(self, token: str | None) -> dict[str, str]:
         lease = self._require_maintenance(token)
         if self.checking:
-            raise HTTPException(status_code=409, detail="The maintenance generation check is still running.", headers={"Retry-After": "2"})
+            raise HTTPException(
+                status_code=409,
+                detail="The maintenance generation check is still running.",
+                headers={"Retry-After": "2"},
+            )
         self.maintenance = None
-        return {"lease_id": lease["lease_id"], "acquired_at": lease["acquired_at"], "released_at": self._timestamp()}
+        return {
+            "lease_id": lease["lease_id"],
+            "acquired_at": lease["acquired_at"],
+            "released_at": self._timestamp(),
+        }
 
     def request_fresh_check(self, maintenance_token: str | None = None) -> None:
         if self.maintenance is not None:
             self._require_maintenance(maintenance_token)
         elif maintenance_token is not None:
             raise HTTPException(status_code=403, detail="A valid maintenance lease is required.")
-        if self.owner is not None or self.checking or (self.maintenance is None and monotonic() < self.retry_at):
-            raise HTTPException(status_code=409, detail="Generation verification needs an idle agent and an elapsed diagnostic cooldown. Try again shortly.", headers={"Retry-After": "30"})
+        if (
+            self.owner is not None
+            or self.checking
+            or (self.maintenance is None and monotonic() < self.retry_at)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Generation verification needs an idle agent and an elapsed diagnostic cooldown. Try again shortly.",
+                headers={"Retry-After": "30"},
+            )
         self.blocked = True
         self.generation += 1
         if self.maintenance is not None:
@@ -91,18 +109,27 @@ class GenerationHealth:
             async with asyncio.timeout(self.timeout):
                 response = await client.post(
                     settings.model_url + "/chat/completions",
-                    json={"model": LOCAL_MODEL, "messages": [{"role": "user", "content": "Reply OK."}],
-                          "max_tokens": 2, "temperature": 0, "stream": False,
-                          "chat_template_kwargs": {"enable_thinking": False}},
+                    json={
+                        "model": LOCAL_MODEL,
+                        "messages": [{"role": "user", "content": "Reply OK."}],
+                        "max_tokens": 2,
+                        "temperature": 0,
+                        "stream": False,
+                        "chat_template_kwargs": {"enable_thinking": False},
+                    },
                     timeout=self.timeout,
                 )
                 response.raise_for_status()
                 body = response.json()
                 message = body["choices"][0]["message"]
                 completion_tokens = body.get("usage", {}).get("completion_tokens")
-                verified = (body.get("model") == LOCAL_MODEL
-                            and isinstance(message.get("content"), str) and bool(message["content"].strip())
-                            and type(completion_tokens) is int and completion_tokens > 0)
+                verified = (
+                    body.get("model") == LOCAL_MODEL
+                    and isinstance(message.get("content"), str)
+                    and bool(message["content"].strip())
+                    and type(completion_tokens) is int
+                    and completion_tokens > 0
+                )
         except asyncio.CancelledError:
             raise
         except (httpx.HTTPError, TimeoutError, ValueError, KeyError, IndexError, TypeError, AttributeError):
@@ -112,7 +139,9 @@ class GenerationHealth:
             self.retry_at = monotonic() + self.cooldown
             if verified and generation == self.generation:
                 self.blocked = False
-            log.warning("readiness_diagnostic generation_canary %s", "verified" if not self.blocked else "unavailable")
+            log.warning(
+                "readiness_diagnostic generation_canary %s", "verified" if not self.blocked else "unavailable"
+            )
         return not self.blocked
 
 
@@ -122,11 +151,23 @@ generation_health = GenerationHealth()
 async def require_generation(request: Request) -> AsyncIterator[None]:
     work = request.method == "POST" and not request.url.path.endswith("/cancel")
     if work and generation_health.maintenance is not None:
-        raise HTTPException(status_code=503, detail="The agent is temporarily reserved for operator maintenance. Try again shortly.", headers={"Retry-After": "2"})
+        raise HTTPException(
+            status_code=503,
+            detail="The agent is temporarily reserved for operator maintenance. Try again shortly.",
+            headers={"Retry-After": "2"},
+        )
     if work and generation_health.blocked:
-        raise HTTPException(status_code=503, detail="Local model generation is temporarily unavailable. Wait for the readiness check to recover, then try again.", headers={"Retry-After": "30"})
+        raise HTTPException(
+            status_code=503,
+            detail="Local model generation is temporarily unavailable. Wait for the readiness check to recover, then try again.",
+            headers={"Retry-After": "30"},
+        )
     if work and generation_health.owner is not None:
-        raise HTTPException(status_code=409, detail="Another investigation is running. Wait for it to finish or cancel it before starting another.", headers={"Retry-After": "2"})
+        raise HTTPException(
+            status_code=409,
+            detail="Another investigation is running. Wait for it to finish or cancel it before starting another.",
+            headers={"Retry-After": "2"},
+        )
     token = object() if work and request.url.path.rsplit("/", 1)[-1] in {"run", "turn", "retry"} else None
     if token is not None:
         generation_health.owner = token
