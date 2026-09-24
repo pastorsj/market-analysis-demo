@@ -125,9 +125,12 @@ spark_validate_public_status() {
   # Reduce the public document to an allowlisted readiness receipt. Never
   # persist the raw response: future status fields may carry operator-only data.
   local source=$1
-  python3 - "$source" <<'PY'
+  # The validator program itself arrives on stdin. Preserve a piped status
+  # document on descriptor 3 when the caller selects `-`.
+  python3 - "$source" 3<&0 <<'PY'
 # PHASE22_STATUS_VALIDATOR_BEGIN
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -145,7 +148,7 @@ def need(condition):
         raise ValueError("status contract")
 
 try:
-    raw = sys.stdin.read() if sys.argv[1] == "-" else Path(sys.argv[1]).read_text(encoding="utf-8")
+    raw = os.fdopen(3).read() if sys.argv[1] == "-" else Path(sys.argv[1]).read_text(encoding="utf-8")
     status = json.loads(raw, object_pairs_hook=lambda pairs: dict(pairs) if len(pairs) == len(dict(pairs)) else (_ for _ in ()).throw(ValueError("duplicate")))
     top = {"schema_version", "service", "version", "ready", "dependencies", "remote_routing_enabled", "observability", "investigations", "supported_tickers", "companies", "coverage", "limitations", "models", "routes", "contracts"}
     need(isinstance(status, dict) and set(status) == top and status.get("schema_version") == "system-status-v1")
