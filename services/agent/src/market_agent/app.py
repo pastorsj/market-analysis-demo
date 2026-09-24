@@ -51,9 +51,9 @@ async def lifespan(app: FastAPI):
         log.exception("curated event catalog unavailable")
         events = None
     key = load_key(settings.state_root / "agent.key")
-    store = Store(settings.state_root / "agent-v2.sqlite3", key, settings.secrets)
+    store = Store(settings.state_root / "investigations.sqlite3", key, settings.secrets)
     fail_interrupted(store)
-    checkpointer, connection = await open_checkpointer(settings.state_root / "checkpoints-v2.sqlite3", key)
+    checkpointer, connection = await open_checkpointer(settings.state_root / "checkpoints.sqlite3", key)
     tracing = RelayTracing()
     await tracing.start()
     agent = MarketAgent(settings, coverage, checkpointer) if settings.remote_enabled else None
