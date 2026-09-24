@@ -1,77 +1,72 @@
+"""Runtime settings, approved model identities, and company display names."""
+
+from __future__ import annotations
+
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, SecretStr, model_validator
-
+# Approved models (see docs/ARCHITECTURE.md). Llama-family models are not allowed.
 LOCAL_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4"
-LUNA_MODEL = "openai/openai/gpt-5.6-luna"
-SOL_MODEL = "openai/openai/gpt-5.6-sol"
+LOCAL_MODEL_REVISION = "bee7596271d1495f6992ae224aefde4410e816b8"
+SPECULATOR_MODEL = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark"
+SPECULATOR_REVISION = "8a0177116d138011e63103110f136ec0ca09ebbf"
+EMBED_MODEL = "nvidia/Nemotron-3-Embed-1B-BF16"
+EMBED_REVISION = "9e0b24858b1195815ecb1188ffa1b73bcea7b30a"
+JUDGE_MODEL = "openai/openai/gpt-5.6-luna"
 CAPABLE_MODEL = "nvidia/nvidia/nemotron-3-ultra"
-TOOLS = (
-    "detect_market_shock",
-    "get_price_context",
-    "search_news",
-    "find_historical_analogues",
-    "trace_shock_propagation",
-    "predict_volatility_risk",
-    "project_news_topics",
-)
+
+MAX_TURNS = 4
+TOOLS_URL = "http://tools:8000/mcp"
+MODEL_URL = "http://model:8001/v1"
+
+# Display names and aliases used to recognize companies in free-text questions.
+# Tickers themselves come from the prepared scenario at runtime.
+COMPANIES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "NVDA": ("NVIDIA", ("nvidia",)),
+    "AMD": ("Advanced Micro Devices", ("advanced micro devices",)),
+    "AVGO": ("Broadcom", ("broadcom",)),
+    "JPM": ("JPMorgan Chase", ("jpmorgan", "jp morgan", "j.p. morgan")),
+    "GS": ("Goldman Sachs", ("goldman sachs", "goldman")),
+    "SCHW": ("Charles Schwab", ("charles schwab", "schwab")),
+}
 
 
-class Settings(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    tools_url: str = "http://tools:8000/mcp"
-    model_url: str = "http://model:8001/v1"
-    local_model: str = LOCAL_MODEL
-    state_root: Path = Path("/srv/market-shock/state")
-    scenario_root: Path = Path("/srv/market-shock/scenario")
-    event_catalog_root: Path = Path("/srv/market-shock/events/current")
-    skills_root: Path = Path("/opt/market-agent/skills")
-    data_gate: Literal["reconstruction", "release"] = "reconstruction"
-    remote_enabled: bool = False
-    remote_url: str | None = None
-    remote_key: SecretStr | None = None
-    remote_model: str | None = CAPABLE_MODEL
-    judge_model: str = LUNA_MODEL
+def _flag(name: str) -> bool:
+    return os.getenv(name, "false").strip().lower() in {"1", "true", "yes", "on"}
 
-    @model_validator(mode="after")
-    def validate_contract(self):
-        if self.tools_url != "http://tools:8000/mcp" or self.model_url != "http://model:8001/v1":
-            raise ValueError("internal service URLs are fixed")
-        models = (self.local_model, self.remote_model or "", self.judge_model)
-        if any("llama" in model.lower() for model in models) or self.local_model != LOCAL_MODEL:
-            raise ValueError("unapproved model")
-        if self.remote_model not in {None, CAPABLE_MODEL} or self.judge_model != LUNA_MODEL:
-            raise ValueError("unapproved remote model")
-        if self.remote_enabled and not all((self.remote_url, self.remote_key, self.remote_model)):
-            raise ValueError("complete remote configuration required")
-        if not all(
-            path.is_absolute()
-            for path in (self.state_root, self.scenario_root, self.event_catalog_root, self.skills_root)
-        ):
-            raise ValueError("runtime roots must be absolute")
-        return self
 
-    def load_coverage(self):
-        """Load the mounted production catalog through the fail-closed v2 boundary."""
-        from .coverage import CoverageCatalog
-
-        return CoverageCatalog.load(self.scenario_root, gate=self.data_gate)
+@dataclass(frozen=True)
+class Settings:
+    state_root: Path
+    scenario_root: Path
+    events_root: Path
+    skills_root: Path
+    remote_enabled: bool
+    remote_url: str | None
+    remote_key: str | None
+    langsmith_project_url: str | None
 
     @classmethod
-    def from_env(cls):
-        return cls(
-            remote_enabled=os.getenv("REMOTE_ROUTING_ENABLED", "false").lower() == "true",
-            remote_url=os.getenv("NVIDIA_BASE_URL") or None,
-            remote_key=os.getenv("NVIDIA_INFERENCE_API_KEY") or None,
-            remote_model=os.getenv("SWITCHYARD_FRONTIER_MODEL") or os.getenv("LLM_MODEL") or CAPABLE_MODEL,
-            judge_model=os.getenv("SWITCHYARD_JUDGE_MODEL") or LUNA_MODEL,
+    def from_env(cls) -> Settings:
+        settings = cls(
             state_root=Path(os.getenv("MARKET_SHOCK_STATE_ROOT", "/srv/market-shock/state")),
             scenario_root=Path(os.getenv("MARKET_SHOCK_SCENARIO_ROOT", "/srv/market-shock/scenario")),
-            event_catalog_root=Path(
+            events_root=Path(
                 os.getenv("MARKET_SHOCK_EVENT_CATALOG_ROOT", "/srv/market-shock/events/current")
             ),
             skills_root=Path(os.getenv("MARKET_SHOCK_SKILLS_ROOT", "/opt/market-agent/skills")),
-            data_gate=os.getenv("MARKET_SHOCK_DATA_GATE", "reconstruction"),
+            remote_enabled=_flag("REMOTE_ROUTING_ENABLED"),
+            remote_url=os.getenv("NVIDIA_BASE_URL") or None,
+            remote_key=os.getenv("NVIDIA_INFERENCE_API_KEY") or None,
+            langsmith_project_url=os.getenv("LANGSMITH_PROJECT_URL") or None,
         )
+        if settings.remote_enabled and not (settings.remote_url and settings.remote_key):
+            raise ValueError("REMOTE_ROUTING_ENABLED requires NVIDIA_BASE_URL and NVIDIA_INFERENCE_API_KEY")
+        return settings
+
+    @property
+    def secrets(self) -> tuple[str, ...]:
+        """Values that must never appear in stored records or API responses."""
+        values = (self.remote_key, os.getenv("LANGSMITH_API_KEY"))
+        return tuple(value for value in values if value)

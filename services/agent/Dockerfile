@@ -34,25 +34,25 @@ FROM python:3.12.10-slim@sha256:fd95fa221297a88e1cf49c55ec1828edd7c5a428187e67b5
 ARG MARKET_SHOCK_BUILD_INPUT_SHA256=unverified
 LABEL com.nvidia.market-shock.build-input-schema="market-shock-build-input-v1" \
       com.nvidia.market-shock.build-input-sha256="${MARKET_SHOCK_BUILD_INPUT_SHA256}" \
-      com.nvidia.market-shock.nemo-relay-version="0.9.0rc3" \
       com.nvidia.market-shock.switchyard-commit="1759dfdff95ed2718f6dd2afef6541654bbd0116" \
       com.nvidia.market-shock.langchain-nvidia-commit="9aa3de853238aa0bcddb799c733a2e189e98078f"
 WORKDIR /opt/market-agent
+# Network tools available to the OpenShell sandbox supervisor that runs this image.
 RUN apt-get update && apt-get install -y --no-install-recommends iproute2 iptables nftables ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml .
+COPY --from=ghcr.io/astral-sh/uv:0.8.22@sha256:9874eb7afe5ca16c363fe80b294fe700e460df29a55532bbfea234a0f12eddb1 /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
 COPY src src
 COPY skills skills
 COPY --from=wheels /build/wheels /wheels
-RUN pip install --no-cache-dir /wheels/*.whl . \
-    && rm -rf /wheels \
-    && useradd --uid 10001 --create-home app \
-    && install -d -o app -g app -m 0700 /srv/market-shock/state /srv/market-shock/traces
-USER 10001
+# Install exactly the locked versions; the two git dependencies come from the wheels built above.
+RUN uv export --frozen --no-dev --no-emit-project --no-hashes \
+      --no-emit-package nemo-switchyard --no-emit-package langchain-nvidia-switchyard -o /tmp/requirements.txt \
+    && pip install --no-cache-dir --no-deps -r /tmp/requirements.txt /wheels/*.whl \
+    && pip install --no-cache-dir --no-deps . \
+    && pip check \
+    && rm -rf /wheels /tmp/requirements.txt
 WORKDIR /sandbox
 EXPOSE 2024
-# OpenShell gives the workload a separate network namespace. Docker's outer
-# namespace cannot probe its loopback; operator status probes /health/ready
-# through sandbox exec and fails closed on application/dependency failure.
+# OpenShell runs the process (as the prepared host user) and probes /health/ready itself.
 HEALTHCHECK NONE
-CMD ["uvicorn", "market_agent.app:app", "--host", "0.0.0.0", "--port", "2024"]

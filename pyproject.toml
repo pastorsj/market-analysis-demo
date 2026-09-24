@@ -1,7 +1,8 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--strict-markers"
-markers = ["unit", "contract", "integration", "gpu"]
+markers = ["gpu: needs the tools GPU image (scripts/spark/test-tools-gpu.sh)"]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 110

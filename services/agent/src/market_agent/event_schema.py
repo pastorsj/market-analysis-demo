@@ -159,7 +159,10 @@ class Qualification(ExactModel):
             )
             _need(all(gap.layer == name for gap in layer.gaps), "event_gap_layer")
         flattened = tuple(gap for _, layer in layers for gap in layer.gaps)
-        key = lambda gap: (gap.layer, gap.code, gap.detail)
+
+        def key(gap):
+            return (gap.layer, gap.code, gap.detail)
+
         _need(len(set(key(gap) for gap in flattened)) == len(flattened), "event_gap_projection")
         _need(tuple(sorted(self.gaps, key=key)) == tuple(sorted(flattened, key=key)), "event_gap_projection")
         _need((self.status == "ready") == all(layer.status == "ready" for _, layer in layers), "event_status")
