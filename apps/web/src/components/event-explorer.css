@@ -1,10 +1,4 @@
 .event-explorer { margin-bottom: 22px; border: 1px solid var(--border); border-radius: 12px; padding: 24px; background: var(--raised); box-shadow: 0 3px 14px #16161a0a; }
-.event-explorer-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.event-explorer-heading h2 { margin: 5px 0 0; font-size: clamp(23px, 2.5vw, 33px); letter-spacing: -.035em; }
-.event-explorer-heading p { max-width: 780px; margin: 9px 0 0; color: var(--secondary); font-size: 12px; line-height: 1.55; }
-.event-count { min-width: 104px; display: grid; justify-items: end; gap: 1px; border-left: 1px solid var(--border); padding-left: 20px; }
-.event-count strong { font-size: 27px; line-height: 1; font-variant-numeric: tabular-nums; }
-.event-count span { color: var(--subtle); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .event-catalog-state, .event-catalog-error { min-height: 104px; display: flex; align-items: center; gap: 13px; margin-top: 18px; border: 1px solid var(--border); border-radius: 8px; padding: 18px; background: #f8f8f9; }
 .event-catalog-state strong, .event-catalog-error strong { font-size: 12px; }
 .event-catalog-state p, .event-catalog-error p { margin: 3px 0 0; color: var(--secondary); font-size: 12px; }
@@ -30,8 +24,6 @@
 .event-card-grid > button > p { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; margin: 8px 0 0; color: var(--secondary); font-size: 12px; line-height: 1.5; }
 .event-card-action { margin-top: auto; padding-top: 12px; color: #3f7200; font-size: 11px; font-weight: 800; }
 .research-event-picker { width: min(1120px, 100%); min-height: 0; max-height: none; flex: 0 0 auto; overflow: visible; margin: 0 auto 22px; border-radius: 10px; padding: 15px; box-shadow: 0 2px 8px #16161a08; container-type: inline-size; }
-.research-event-picker .event-explorer-heading h2 { margin-top: 3px; font-size: clamp(18px, 2vw, 24px); }
-.research-event-picker .event-explorer-heading p { margin-top: 5px; }
 .event-picker-compact-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .event-picker-compact-heading h2 { margin: 3px 0 0; font-size: 18px; letter-spacing: -.02em; }
 .event-picker-compact-heading > span { color: var(--subtle); font-size: 10px; font-weight: 800; text-transform: uppercase; white-space: nowrap; }
@@ -49,7 +41,6 @@
 .event-pinned-facts > div { display: grid; gap: 2px; }
 .event-pinned-facts dt { color: var(--subtle); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .event-pinned-facts dd { margin: 0; color: var(--body); font-size: 11px; line-height: 1.45; }
-.event-pinned-error { margin-top: 10px !important; border-left: 2px solid var(--danger); padding-left: 8px; color: var(--danger) !important; }
 .event-pinned-limits { margin-top: 11px; color: var(--secondary); font-size: 10px; line-height: 1.5; }
 .event-pinned-limits summary { cursor: pointer; font-weight: 800; }
 .event-pinned-limits ul { margin: 7px 0 0; padding-left: 15px; }
@@ -67,8 +58,6 @@
 
 @media (max-width: 560px) {
   .event-explorer { padding: 15px 11px; }
-  .event-explorer-heading { display: block; }
-  .event-count { width: fit-content; justify-items: start; margin-top: 12px; border-left: 0; padding-left: 0; }
   .event-category-filters { flex-wrap: wrap; overflow: visible; padding-bottom: 4px; }
   .event-category-filters button { flex: 0 0 auto; }
   .event-card-grid { grid-template-columns: 1fr; }
@@ -95,3 +84,8 @@
     .research-event-picker .event-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 }
+
+.event-questions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 10px 8px; }
+.event-questions button { border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; background: var(--raised); color: var(--secondary); font-size: 12px; }
+.event-questions button:hover { border-color: #a8c985; background: #f6faef; }
+.event-questions button[aria-pressed="true"] { border-color: #8fbd58; background: #edf5e4; color: #356b00; }
