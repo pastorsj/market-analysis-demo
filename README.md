@@ -1,280 +1,174 @@
 <p align="center">
-  <a href="https://www.nvidia.com/en-us/products/workstations/dgx-spark/">
-    <img src="apps/web/src/assets/partners/nvidia_logo.png" alt="NVIDIA" height="76">
-  </a>
-  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;×&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.langchain.com/">
-    <img src="apps/web/src/assets/partners/langchain_logo.png" alt="LangChain" height="76">
-  </a>
+  <img src="apps/web/src/assets/partners/nvidia_logo.png" alt="NVIDIA" height="64">
+  &nbsp;&nbsp;&nbsp;×&nbsp;&nbsp;&nbsp;
+  <img src="apps/web/src/assets/partners/langchain_logo.png" alt="LangChain" height="64">
 </p>
 
 <h1 align="center">Market Shock Investigator</h1>
 
-<p align="center">
-  A local-first financial research agent built with NVIDIA and LangChain technologies.
-</p>
+A financial research agent for one NVIDIA DGX Spark. You pick a curated market
+shock (or name a supported company and date), ask a question, and a LangChain
+Deep Agent reads a research skill, calls GPU-backed evidence tools, and returns
+a cited answer with a timeline of every model and tool call.
 
-<p align="center">
-  <code>DGX Spark</code> · <code>Deep Agents</code> · <code>Nemotron</code> ·
-  <code>RAPIDS</code> · <code>Switchyard</code> · <code>OpenShell</code>
-</p>
+> This is a supervised booth demo, validated on one prepared DGX Spark. It is not
+> a hosted or multi-user service, and its answers are not investment advice.
 
-Market Shock Investigator turns a known market event—or a supported ticker,
-date, and question—into an evidence-linked historical equity investigation. A
-LangChain Deep Agent selects a research skill, decides which GPU-accelerated
-tools to use, and returns a sourced answer alongside an interactive execution
-timeline.
+<p align="center"><img src="docs/images/research.png" alt="Research view" width="100%"></p>
 
-> **Demo status:** this repository is a supervised booth demo and proof of life,
-> validated for one prepared NVIDIA DGX Spark. It is not a hosted service, a
-> multi-user deployment, a live trading system, or investment advice.
+## What it does
 
-<p align="center">
-  <img src="docs/images/research.png" alt="Market Shock Investigator research scenarios" width="100%">
-</p>
+- **Deep Agent with skills.** `create_deep_agent` lists the seven skill
+  descriptions; the model picks one and reads its `SKILL.md`. All seven
+  read-only evidence tools are available. Tool wrappers, not the model, set the
+  evidence cutoff, keep tickers inside the investigation, cap and dedupe calls,
+  and reject evidence dated after the cutoff.
+- **Typed, cited answers.** The final answer is structured output. The report
+  keeps only citation IDs the tools actually returned and fails the turn if the
+  tools returned evidence and none of it was cited.
+- **Every step routed by NeMo Switchyard.** Local Nemotron 3.5 Lightning produces
+  each step; a remote judge (`openai/openai/gpt-5.6-luna`) decides whether remote
+  Nemotron 3 Ultra should redo it. If the judge's verdict is unreadable, the step
+  fails.
+- **Traced and sandboxed.** NeMo Relay records one span per agent step and one
+  per physical model call, with optional LangSmith export. The agent runs only
+  inside an NVIDIA OpenShell 0.0.116 sandbox.
 
-## What the demo shows
-
-- **A real agent, not a canned answer path.** LangChain Deep Agents plans each
-  investigation, reads one versioned skill, calls only the tools available to
-  that skill, and completes through a typed answer submission.
-- **Local inference with governed escalation.** Nemotron 3.5 Lightning runs on
-  DGX Spark. NeMo Switchyard evaluates each Deep Agent reasoning turn and can escalate
-  to Nemotron 3 Ultra through a configured inference endpoint.
-- **GPU-backed financial evidence.** Typed MCP tools use cuDF, cuVS, cuGraph,
-  cuML, CUDA XGBoost, and Nemotron embeddings for market calculations,
-  retrieval, similarity, graph, topic, and risk workflows.
-- **Point-in-time research boundaries.** Curated events pin companies, market
-  windows, and evidence cutoffs. Tools reject evidence that was unavailable by
-  the selected cutoff instead of silently filling gaps.
-- **Visible work and latency.** The UI streams the investigation, renders
-  citations and uncertainty, and exposes a hoverable Gantt view of policy,
-  model, tool, and presentation spans.
-- **A contained agent runtime.** NVIDIA OpenShell 0.0.116 owns the agent process,
-  limits its files and endpoints, and provides no unsandboxed fallback.
-
-### Built together
-
-| LangChain | NVIDIA |
-| --- | --- |
-| [Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview) supplies the skill-guided, tool-using agent harness. | [DGX Spark](https://www.nvidia.com/en-us/products/workstations/dgx-spark/) hosts local inference, the application, and GPU data work. |
-| [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) provides the durable execution runtime beneath the agent. | Nemotron 3.5 Lightning, Nemotron 3 Embed, and Nemotron 3 Ultra cover efficient reasoning, retrieval, and capable escalation. |
-| [LangSmith](https://docs.langchain.com/langsmith/observability) provides an optional destination for correlated traces. | NeMo Switchyard routes model turns; NeMo Relay traces them; OpenShell contains the agent; CUDA-X and RAPIDS accelerate its tools. |
-
-## Experience
-
-The application has three connected views:
-
-1. **Dashboard** — inspect a personal market desk with a watchlist, historical
-   context, company evidence, and an optional display-only live market widget.
-2. **Research** — choose a curated shock event or define a supported custom
-   scope, ask a suggested or free-text question, inspect the answer and sources,
-   then continue with a follow-up.
-3. **Built Together** — walk through how LangChain and NVIDIA technologies take
-   an investigation from question to evidence-backed answer.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/images/dashboard.png" alt="Personal market dashboard"></td>
-    <td width="50%"><img src="docs/images/built-together.png" alt="NVIDIA and LangChain Built Together view"></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Personal market dashboard</strong></td>
-    <td align="center"><strong>NVIDIA × LangChain story</strong></td>
-  </tr>
-</table>
-
-Supported research modes include market-dislocation analysis, peer comparison,
-historical analogues, bounded shock-propagation paths, volatility-risk context,
-and evidence-theme mapping. Out-of-scope questions receive guidance instead of a
-general-purpose answer.
+**What is local and what is not.** Lightning, the embedding model, the tools,
+and all data run on the Spark, and startup never builds or downloads anything.
+Research does need the remote endpoint, because the judge reviews every step.
+With `REMOTE_ROUTING_ENABLED=false` the app starts as "prepared, research
+disabled": the dashboard works, and investigations are refused.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    browser["Browser<br/>localhost:3000"]
-    web["web :3000<br/>React + Nginx"]
-    agent["agent :2024<br/>OpenShell + Deep Agent"]
-    tools["tools :8000<br/>MCP + GPU analytics"]
-    model["model :8001<br/>vLLM + local Nemotron"]
-    remote["Configured inference endpoint<br/>Luna + Nemotron 3 Ultra"]
-    state[("/srv/market-shock<br/>prepared data, state, traces")]
-    observe["NeMo Relay<br/>optional LangSmith export"]
-
-    browser -->|same-origin /api| web
-    web --> agent
-    agent --> tools
-    agent --> model
-    agent --> remote
-    agent --> state
-    tools --> state
-    agent -.-> observe
+    browser[Browser] -->|same-origin /api| web["web :3000<br/>React + nginx"]
+    web --> agent["agent :2024<br/>Deep Agent in OpenShell"]
+    agent -->|MCP| tools["tools :8000<br/>7 GPU tools"]
+    agent -->|OpenAI API| model["model :8001<br/>vLLM, Nemotron 3.5 Lightning"]
+    agent -->|judge + escalation| remote["Remote endpoint<br/>Luna judge, Nemotron 3 Ultra"]
+    agent -.->|Relay traces| smith[(LangSmith, optional)]
+    agent --- state[("/srv/market-shock<br/>scenario, state, traces")]
+    tools --- state
 ```
 
-There are exactly four application roles:
-
-| Role | Responsibility | Boundary |
+| Role | What it runs | Boundary |
 | --- | --- | --- |
-| `web:3000` | React UI and same-origin API proxy | The only host-published application port |
-| `agent:2024` | Deep Agent, skills, routing, tracing, REST/SSE, and encrypted state | Runs only inside the prepared OpenShell sandbox |
-| `tools:8000` | Seven typed, read-only MCP tools | Reachable by the agent on the private backend |
-| `model:8001` | Local Nemotron generation through vLLM | Reachable by the agent on the private backend |
+| `web:3000` | React UI, nginx proxy of `/api` to the agent | Only published port (`127.0.0.1:3000`) |
+| `agent:2024` | FastAPI app, Deep Agent, Switchyard, Relay, encrypted state | OpenShell sandbox; no unsandboxed fallback |
+| `tools:8000` | MCP server with seven read-only tools | Private network; only the agent calls it |
+| `model:8001` | vLLM serving Lightning with a speculative draft model | Private network; only the agent calls it |
 
-The browser never receives model, MCP, or credential details. Docker Compose
-runs `web`, `tools`, and `model`; its `agent` service is image-only because
-OpenShell owns the running agent. Relay records the correlated agent/model/tool
-hierarchy locally and can export it to LangSmith when configured.
-
-### Investigation flow
-
-1. The server resolves the event or custom scope and freezes its evidence cutoff.
-2. The runtime exposes one research skill and that skill's allowed MCP tools.
-3. `create_deep_agent` builds the agent with Relay and
-   `SwitchyardRoutingMiddleware`.
-4. Every Deep Agent reasoning call passes through Switchyard. Luna judges whether the
-   local Lightning result is sufficient or Ultra should run.
-5. The agent chooses evidence tools, reviews their typed results, and calls
-   `submit_answer` with citations produced by that investigation.
-6. The UI streams the answer, evidence, uncertainty, and timing trace. Long,
-   structured answers may receive a separate Ultra layout-only pass; facts and
-   source ordering remain fixed.
-
-For the full trust and data-flow model, see
-[Architecture](docs/ARCHITECTURE.md).
-
-## Models
-
-In the deployed demo, local model artifacts are pinned to immutable revisions
-and served from DGX Spark. Model weights are not stored in this repository.
-Remote models are available only to the sandboxed agent through the configured
-endpoint.
-
-| Location | Role | Exact model |
-| --- | --- | --- |
-| DGX Spark | Efficient agent target | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4@bee7596271d1495f6992ae224aefde4410e816b8` |
-| DGX Spark | Three-token speculative draft | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@8a0177116d138011e63103110f136ec0ca09ebbf` |
-| DGX Spark | Evidence and query embeddings | `nvidia/Nemotron-3-Embed-1B-BF16@9e0b24858b1195815ecb1188ffa1b73bcea7b30a` |
-| Configured endpoint | Switchyard routing judge | `openai/openai/gpt-5.6-luna` |
-| Configured endpoint | Capable target and eligible presentation planner | `nvidia/nvidia/nemotron-3-ultra` |
-
-There is one public application route: `switchyard_escalation`. Missing model
-identity, CUDA execution, routing, or transport evidence produces an explicit
-terminal state rather than a hidden model substitution.
-
-## DGX Spark requirements
-
-The supported deployment is intentionally specific:
-
-- NVIDIA DGX Spark with a GB10 GPU and `aarch64` host
-- Ubuntu 24.04
-- NVIDIA driver 580 or newer and CUDA toolkit 13.x
-- Docker Engine, Docker Compose v2, and the NVIDIA Container Toolkit
-- At least 16 GiB of available memory and 100 GiB of free space at preparation
-- Network access during preparation for images, model artifacts, and source data
-- Access to an OpenAI-compatible endpoint serving the configured Luna and Ultra
-  route IDs for live investigations
-
-Other machines may be useful for source-only development, but they are not the
-validated runtime for the complete demo.
-
-## Source and runtime
-
-Clone the public source to inspect the application or work on the UI and focused
-tests:
-
-```bash
-git clone https://github.com/pastorsj/market-analysis-demo.git
-cd market-analysis-demo
-cp .env.spark.example .env
-```
-
-This repository intentionally omits model weights, private provider credentials,
-the exhaustive evaluation corpus, release reports, and the conference image's
-provisioning records. It is therefore an inspectable source release—not a
-download-and-run hosted product. The operator lifecycle below works on a DGX
-Spark that was provisioned from this exact source and already has its immutable
-artifacts beneath `/srv/market-shock`.
-
-On that prepared Spark, configure the ignored `.env` with the approved endpoint
-and credentials. After a full host reboot, refresh the prepared OpenShell sandbox
-network namespace, verify readiness, and open **http://localhost:3000**:
-
-```bash
-./demo start --recreate-agent
-./demo doctor
-```
-
-For another start during the same host boot, normal `./demo` startup is enough.
-See [Operations](docs/OPERATIONS.md) for the transport and recovery sequence.
-
-Startup does not build, pull, install, acquire data, or download models. It
-verifies the prepared artifacts and starts only from local images. Live research
-still needs the configured routing endpoint; “offline start” describes artifact
-startup, not a fully disconnected investigation.
-
-Useful operator commands:
-
-```bash
-./demo doctor                        # inspect readiness without exposing secrets
-./demo status                        # show the public runtime state
-./demo stop                          # stop while preserving prepared artifacts
-```
-
-## Focused checks
-
-For source changes, these are the shortest useful checks:
-
-```bash
-corepack pnpm@9.15.9 --dir apps/web install --frozen-lockfile
-corepack pnpm@9.15.9 --dir apps/web test -- --run
-corepack pnpm@9.15.9 --dir apps/web typecheck
-corepack pnpm@9.15.9 --dir apps/web build
-```
-
-Run the focused public Python checks with:
-
-```bash
-PYTHONPATH=services/agent/src:services/tools/src:. \
-  uv run --project services/agent --with pytest --with pytest-asyncio \
-  pytest -q tests/agent tests/unit
-```
+Compose runs `web`, `tools`, and `model`. OpenShell runs the agent. See
+[Architecture](docs/ARCHITECTURE.md) for the step-by-step request flow.
 
 ## Repository map
 
-```text
-apps/web/                         React dashboard and research UI
-services/agent/src/market_agent/  Deep Agent, policy, routing, tracing, API
-services/agent/skills/            Versioned research and presentation skills
-services/tools/src/market_tools/  Typed MCP tools and GPU implementations
-scripts/data/                     Point-in-time artifact contracts
-scripts/spark/                    Prepared DGX Spark lifecycle and OpenShell policy
-data/events/                      Curated market-shock event catalog
-docs/                             Architecture, operations, and walkthrough
+| Area | Where |
+| --- | --- |
+| UI (Dashboard, Research, Built Together) | `apps/web/` |
+| HTTP API (investigations, SSE, status) | `services/agent/src/market_agent/app.py` |
+| Agent construction | `services/agent/src/market_agent/agent.py` |
+| Evidence tool wrappers (cutoff, scope, limits) | `services/agent/src/market_agent/tools.py` |
+| Switchyard routing and model-call spans | `services/agent/src/market_agent/routing.py` |
+| Scope resolution, report building, turn runner | `scope.py`, `report.py`, `runner.py` in the same package |
+| System and judge prompts | `services/agent/src/market_agent/prompts/` |
+| Skills | `services/agent/skills/*/SKILL.md` |
+| GPU tools service (MCP) | `services/tools/src/market_tools/` |
+| Settings and model IDs | `services/agent/src/market_agent/config.py` |
+| Operator settings | `.env.spark.example`, `compose.yaml` |
+| OpenShell policy and gateway | `scripts/spark/openshell/` |
+| Operator scripts | `demo`, `scripts/spark/` |
+| Curated events and data sources | `data/` |
+| Tests | `tests/` |
+
+## Skills and tools
+
+| Skill | Suggested tools |
+| --- | --- |
+| `market-dislocation` | `get_price_context`, `detect_market_shock`, `search_news` |
+| `peer-comparison` | `get_price_context`, `detect_market_shock`, `search_news` |
+| `historical-analogues` | `get_price_context`, `detect_market_shock`, `find_historical_analogues` |
+| `comovement` | `get_price_context`, `detect_market_shock`, `map_comovement`, `search_news` |
+| `volatility-risk` | `detect_market_shock`, `predict_volatility_risk`, `search_news` |
+| `narrative-map` | `search_news`, `project_news_topics`, `get_price_context` |
+| `research-guide` | none (greetings, missing company or date, out-of-scope requests) |
+
+A skill's `allowed-tools` list is guidance for the model. The code does not
+enforce it: all seven tools are bound for every turn.
+
+## Models
+
+| Where | Role | Model |
+| --- | --- | --- |
+| Spark | Agent reasoning | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4@bee7596271d1495f6992ae224aefde4410e816b8` |
+| Spark | Speculative draft | `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@8a0177116d138011e63103110f136ec0ca09ebbf` |
+| Spark | Embeddings | `nvidia/Nemotron-3-Embed-1B-BF16@9e0b24858b1195815ecb1188ffa1b73bcea7b30a` |
+| Remote | Switchyard judge | `openai/openai/gpt-5.6-luna` |
+| Remote | Escalated reasoning | `nvidia/nvidia/nemotron-3-ultra` |
+
+Remote calls send the conversation and tool evidence to the configured endpoint.
+
+## Data
+
+This is a small, prepared dataset:
+
+- Five target companies (NVDA, AMD, JPM, GS, SCHW) plus AVGO as a peer, about
+  10.6k daily bars. The prices are a later reconstruction from a CC0 Kaggle
+  dataset, not an archive captured on each date.
+- 494 documents, mostly SEC filing metadata, plus a few company releases and 12
+  curated one-sentence news summaries.
+- 12 curated shock events in `data/events/catalog.yaml`.
+
+GPU use is real but small: Nemotron embeddings with cuVS vector search, cuML
+UMAP for the topic map, CUDA XGBoost for volatility risk, cuGraph on a small
+return-correlation network, and cuDF for features.
+
+## Quick start
+
+Model weights, credentials, and the prepared `/srv/market-shock` runtime are not
+in this repository, so these commands only work on a Spark that was already
+provisioned. The full sequence is in [Operations](docs/OPERATIONS.md).
+
+```bash
+cp .env.spark.example .env        # set REMOTE_ROUTING_ENABLED=true, NVIDIA_BASE_URL, NVIDIA_INFERENCE_API_KEY
+./demo start                      # add --recreate-agent after a reboot or an OpenShell re-prepare
+./demo doctor                     # readiness checks; never prints secrets
+./demo stop
 ```
 
-## Demo boundaries
+Open <http://localhost:3000> once startup prints `READY FOR DEMO`.
 
-- Historical prices and documents are reconstructed later; a cutoff filter does
-  not turn them into an archive captured on the original date.
-- The optional live market widget is display-only and is never cited by the
-  research agent. If it is unavailable, the UI falls back to prepared history.
-- The application is loopback-bound. The workstation-local OpenShell gateway is
-  not an authenticated public control plane and must not be exposed to a LAN or
-  the Internet.
-- Credentials belong only in the ignored `.env` and endpoint-bound OpenShell
-  providers. They must not be placed in images, the browser, reports, or logs.
-- Answers are research demonstrations, not recommendations to buy, sell, or hold
-  a security.
+## Testing
+
+```bash
+# Agent, operator-script, and CPU tool tests (as in CI)
+PYTHONPATH=services/agent/src:services/tools/src:. \
+  uv run --project services/agent --with pytest --with pytest-asyncio --with numpy \
+  pytest tests/agent tests/unit tests/tools
+
+# GPU tool tests inside the tools image, on a prepared Spark
+scripts/spark/test-tools-gpu.sh
+
+# Web
+corepack pnpm@9.15.9 --dir apps/web install --frozen-lockfile
+corepack pnpm@9.15.9 --dir apps/web test -- --run
+corepack pnpm@9.15.9 --dir apps/web typecheck
+```
+
+CI (`.github/workflows/quality.yaml`) runs `ruff check` on `scripts` and `tests`,
+`ruff format --check` on `services`, `scripts`, and `tests`, the Python tests
+above, and the web test, typecheck, and build.
 
 ## Documentation
 
-- [Demo walkthrough](docs/DEMO_WALKTHROUGH.md) — presenter flow and example questions
-- [Architecture](docs/ARCHITECTURE.md) — components, trust boundaries, models, and tools
-- [Operations](docs/OPERATIONS.md) — startup, shutdown, recovery, and common failures
+- [Architecture](docs/ARCHITECTURE.md): request flow, trust boundaries, what runs locally
+- [Operations](docs/OPERATIONS.md): start, stop, doctor, recovery, troubleshooting
+- [Demo walkthrough](docs/DEMO_WALKTHROUGH.md): presenter script
 
 ## License
 
-This project is licensed under the [Apache License 2.0](LICENSE). Attribution
-for included third-party material is recorded in
-[Third-party notices](THIRD_PARTY_NOTICES.md).
+[Apache License 2.0](LICENSE). Third-party attributions are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

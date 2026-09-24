@@ -38,11 +38,11 @@ fi
 python3 "$(dirname "$0")/retention.py" check \
   || spark_die "retention budget check failed; follow the inventory/reset/expiry guidance above"
 [[ -r "${SPARK_MANIFEST_DIR}/models.json" ]] \
-  || spark_die "model manifest missing; run ./demo prepare"
+  || spark_die "model manifest missing; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 [[ -r "${SPARK_SCENARIO_DIR}/manifest.json" ]] \
-  || spark_die "scenario manifest missing; run ./demo prepare"
+  || spark_die "scenario manifest missing; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 [[ -r "${SPARK_MANIFEST_DIR}/scenario-current.json" ]] \
-  || spark_die "scenario publication receipt missing; run ./demo prepare"
+  || spark_die "scenario publication receipt missing; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 scenario_id="$(jq -r '.scenario_id' "${SPARK_SCENARIO_DIR}/manifest.json")"
 [[ "$scenario_id" == "$(jq -r '.scenario_id' "${SPARK_MANIFEST_DIR}/scenario-current.json")" ]] \
   || spark_die "published scenario identity drift"
@@ -50,7 +50,7 @@ scenario_id="$(jq -r '.scenario_id' "${SPARK_SCENARIO_DIR}/manifest.json")"
     "$(jq -r '.manifest_sha256' "${SPARK_MANIFEST_DIR}/scenario-current.json")" ]] \
   || spark_die "published scenario manifest digest drift"
 [[ -r "${SPARK_MANIFEST_DIR}/market-prep.json" ]] \
-  || spark_die "market-prep image receipt missing; run ./demo prepare"
+  || spark_die "market-prep image receipt missing; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 [[ "$(docker image inspect market-shock/market-prep:phase9 --format '{{.Id}}')" == \
     "$(jq -r '.image_id' "${SPARK_MANIFEST_DIR}/market-prep.json")" ]] \
   || spark_die "market-prep image identity drift"
@@ -59,18 +59,18 @@ docker run --rm --pull never --network none --user "$(id -u):$(id -g)" -e HOME=/
   market-shock/market-prep:phase9 -c \
   'from pathlib import Path; from scripts.data.artifact_contract import load_manifest; load_manifest(Path("/srv/market-shock/scenario/manifest.json"))'
 spark_json_status_pass "${SPARK_REPORT_DIR}/compatibility.json" \
-  || spark_die "foundation compatibility gate is missing or failed; run ./demo prepare"
+  || spark_die "foundation compatibility gate is missing or failed; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 for model in \
   nemotron-3-embed-1b-bf16-9e0b248 \
   nemotron-3.5-lightning-nvfp4-bee7596 \
   nemotron-3.5-lightning-dspark-8a01771; do
   [[ -d "${SPARK_RUNTIME_ROOT}/models/hf/${model}" ]] \
-    || spark_die "Compose-visible model path is missing: ${model}; run ./demo prepare"
+    || spark_die "Compose-visible model path is missing: ${model}; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 done
 docker image inspect "$SPARK_MODEL_IMAGE" >/dev/null 2>&1 \
-  || spark_die "the exact vLLM image is absent; run ./demo prepare"
+  || spark_die "the exact vLLM image is absent; this runtime was not prepared on this machine (see docs/OPERATIONS.md)"
 [[ -r "${SPARK_MANIFEST_DIR}/runtime-images.json" ]] \
-  || spark_die "runtime image receipt missing; run ./demo prepare"
+  || spark_die "runtime image receipt missing; run scripts/spark/build-runtime.sh"
 [[ -f "${SPARK_MANIFEST_DIR}/runtime-images.json" && ! -L "${SPARK_MANIFEST_DIR}/runtime-images.json" ]] \
   || spark_die "runtime image receipt must be a regular file"
 runtime_rows="$(python3 "${REPO_ROOT}/scripts/spark/process_contract.py" receipt "${SPARK_MANIFEST_DIR}/runtime-images.json")" || spark_die "runtime image receipt is malformed"
