@@ -4,31 +4,43 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, UTC
 import hashlib
 import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 from urllib.parse import parse_qsl, urlparse
 
 
 RAW_FIELDS = ("raw_open", "raw_high", "raw_low", "raw_close", "raw_volume")
-ADJUSTED_FIELDS = (
-    "adjusted_open", "adjusted_high", "adjusted_low", "adjusted_close", "volume"
+ADJUSTED_FIELDS = ("adjusted_open", "adjusted_high", "adjusted_low", "adjusted_close", "volume")
+BAR_COLUMNS = frozenset(
+    {
+        "instrument_id",
+        "session_date",
+        "bar_start",
+        "bar_end",
+        *RAW_FIELDS,
+        *ADJUSTED_FIELDS,
+        "price_basis",
+        "source_id",
+        "source_row_id",
+        "captured_at",
+        "vintage_status",
+    }
 )
-BAR_COLUMNS = frozenset({
-    "instrument_id", "session_date", "bar_start", "bar_end", *RAW_FIELDS,
-    *ADJUSTED_FIELDS, "price_basis", "source_id", "source_row_id", "captured_at",
-    "vintage_status",
-})
 GATES = frozenset({"fixture", "reconstruction", "release"})
 VINTAGES = frozenset({"archived_at_cutoff", "reconstructed_later", "unknown"})
 KAGGLE_CAPTURE_ADAPTER_VERSION = 4
 KAGGLE_CAPTURE_OBSERVED_KEYS = (
-    "observed_start", "observed_end_inclusive", "observed_rows",
-    "observed_rows_by_symbol", "mapping",
+    "observed_start",
+    "observed_end_inclusive",
+    "observed_rows",
+    "observed_rows_by_symbol",
+    "mapping",
 )
 
 
@@ -48,7 +60,10 @@ class MarketContractError(ValueError):
 
 def canonical_json(value: Any) -> bytes:
     return json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     ).encode("utf-8")
 
 
@@ -94,7 +109,7 @@ def parse_utc(value: Any, field: str = "timestamp") -> datetime:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00")
     except ValueError as exc:
         raise MarketContractError([ContractIssue("invalid_utc_time", field)]) from exc
-    if parsed.tzinfo != timezone.utc:
+    if parsed.tzinfo != UTC:
         raise MarketContractError([ContractIssue("invalid_utc_time", field)])
     return parsed
 
@@ -133,11 +148,26 @@ def artifact_record(root: Path, path: Path, records: int) -> dict[str, Any]:
 def validate_source_profile(source_id: str, profile: dict[str, Any]) -> None:
     issues: list[ContractIssue] = []
     required = {
-        "adapter", "dataset_version", "dataset_ref", "dataset_id",
-        "download_url", "metadata_url", "attribution_url",
-        "provider", "license_id", "redistribution", "archive_bytes", "archive_sha256",
-        "member", "member_bytes", "member_sha256", "header_rows", "price_basis",
-        "fields", "symbols", "vintage_status",
+        "adapter",
+        "dataset_version",
+        "dataset_ref",
+        "dataset_id",
+        "download_url",
+        "metadata_url",
+        "attribution_url",
+        "provider",
+        "license_id",
+        "redistribution",
+        "archive_bytes",
+        "archive_sha256",
+        "member",
+        "member_bytes",
+        "member_sha256",
+        "header_rows",
+        "price_basis",
+        "fields",
+        "symbols",
+        "vintage_status",
     }
     if set(profile) != required:
         issues.append(ContractIssue("source_shape", source_id))
@@ -146,10 +176,7 @@ def validate_source_profile(source_id: str, profile: dict[str, Any]) -> None:
         issues.append(ContractIssue("dataset_version", source_id))
     dataset_ref = profile.get("dataset_ref")
     ref_parts = str(dataset_ref).split("/")
-    if (
-        len(ref_parts) != 2
-        or any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", part) for part in ref_parts)
-    ):
+    if len(ref_parts) != 2 or any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", part) for part in ref_parts):
         issues.append(ContractIssue("dataset_identity", source_id))
     dataset_id = profile.get("dataset_id")
     if isinstance(dataset_id, bool) or not isinstance(dataset_id, int) or dataset_id <= 0:
@@ -164,8 +191,11 @@ def validate_source_profile(source_id: str, profile: dict[str, Any]) -> None:
         parsed = urlparse(str(profile.get(name, "")))
         expected_query = [("datasetVersionNumber", str(version))] if name == "download_url" else []
         if (
-            parsed.scheme != "https" or parsed.netloc != "www.kaggle.com"
-            or parsed.path != expected_path or parsed.params or parsed.fragment
+            parsed.scheme != "https"
+            or parsed.netloc != "www.kaggle.com"
+            or parsed.path != expected_path
+            or parsed.params
+            or parsed.fragment
             or parse_qsl(parsed.query, keep_blank_values=True) != expected_query
         ):
             code = "unpinned_source" if name == "download_url" else "source_url"
@@ -211,9 +241,7 @@ def _verify_artifacts(root: Path, manifest: dict[str, Any]) -> list[ContractIssu
         return [ContractIssue("artifact_manifest", "artifacts")]
     seen: set[str] = set()
     for item in artifacts:
-        if not isinstance(item, dict) or set(item) != {
-            "path", "sha256", "bytes", "records", "media_type"
-        }:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256", "bytes", "records", "media_type"}:
             issues.append(ContractIssue("artifact_shape", repr(item)))
             continue
         relative = item["path"]
@@ -235,6 +263,7 @@ def _verify_artifacts(root: Path, manifest: dict[str, Any]) -> list[ContractIssu
         if path.suffix == ".parquet":
             try:
                 import pyarrow.parquet as pq
+
                 if pq.ParquetFile(path).metadata.num_rows != item["records"]:
                     issues.append(ContractIssue("artifact_records", relative))
             except Exception as exc:
@@ -292,11 +321,13 @@ def _observed_field_coverage(rows: list[dict[str, Any]]) -> dict[str, dict[str, 
     for symbol in symbols:
         selected = [row for row in rows if row["instrument_id"] == symbol]
         present = [
-            field for field in (*RAW_FIELDS, *ADJUSTED_FIELDS)
+            field
+            for field in (*RAW_FIELDS, *ADJUSTED_FIELDS)
             if selected and all(row.get(field) is not None for row in selected)
         ]
         partial = [
-            field for field in (*RAW_FIELDS, *ADJUSTED_FIELDS)
+            field
+            for field in (*RAW_FIELDS, *ADJUSTED_FIELDS)
             if any(row.get(field) is not None for row in selected) and field not in present
         ]
         result[symbol] = {
@@ -313,6 +344,7 @@ def _observed_field_coverage(rows: list[dict[str, Any]]) -> dict[str, dict[str, 
 def _small_parquet(root: Path, name: str, issues: list[ContractIssue]) -> list[dict[str, Any]]:
     try:
         import pyarrow.parquet as pq
+
         return pq.read_table(root / name).to_pylist()
     except Exception as exc:
         issues.append(ContractIssue("parquet_unreadable", f"{name}:{type(exc).__name__}"))
@@ -320,7 +352,9 @@ def _small_parquet(root: Path, name: str, issues: list[ContractIssue]) -> list[d
 
 
 def _validate_market_tables(
-    root: Path, manifest: dict[str, Any], rows: list[dict[str, Any]],
+    root: Path,
+    manifest: dict[str, Any],
+    rows: list[dict[str, Any]],
 ) -> list[ContractIssue]:
     issues: list[ContractIssue] = []
     sessions = _small_parquet(root, "sessions.parquet", issues)
@@ -349,7 +383,11 @@ def _validate_market_tables(
     observed_dates = {str(row.get("session_date")) for row in rows}
     for row in rows:
         session = session_by_date.get(str(row.get("session_date")))
-        if not session or row.get("bar_start") != session.get("open_at") or row.get("bar_end") != session.get("close_at"):
+        if (
+            not session
+            or row.get("bar_start") != session.get("open_at")
+            or row.get("bar_end") != session.get("close_at")
+        ):
             issues.append(ContractIssue("bar_session_binding", str(row.get("source_row_id"))))
     for session_date, session in session_by_date.items():
         if bool(session.get("observed_any")) != (session_date in observed_dates):
@@ -374,14 +412,24 @@ def _validate_market_tables(
         seen = {row["session_date"] for row in selected}
         missing = all_sessions - seen
         status = (
-            "present" if selected and not missing else "partial" if selected
-            else "missing_optional" if role == "optional" else "missing_required"
+            "present"
+            if selected and not missing
+            else "partial"
+            if selected
+            else "missing_optional"
+            if role == "optional"
+            else "missing_required"
         )
         expected = {
-            "role": role, "status": status, "rows": len(selected),
-            "start": min(seen) if seen else None, "end_inclusive": max(seen) if seen else None,
+            "role": role,
+            "status": status,
+            "rows": len(selected),
+            "start": min(seen) if seen else None,
+            "end_inclusive": max(seen) if seen else None,
             "missing_sessions": len(missing),
-            "present_fields": json.dumps(fields.get(symbol, {}).get("present_fields", []), separators=(",", ":")),
+            "present_fields": json.dumps(
+                fields.get(symbol, {}).get("present_fields", []), separators=(",", ":")
+            ),
         }
         for key, value in expected.items():
             if actual.get(key) != value:
@@ -405,9 +453,11 @@ def _validate_market_tables(
         except (TypeError, ValueError, OverflowError):
             factor = float("nan")
         if (
-            not math.isfinite(factor) or factor <= 0
+            not math.isfinite(factor)
+            or factor <= 0
             or not str(action.get("attribution_url", "")).startswith("https://")
-            or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest)
+            or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
         ):
             issues.append(ContractIssue("action_contract", str(action.get("instrument_id"))))
     if {row.get("instrument_id") for row in instruments} != set(roles):
@@ -429,7 +479,9 @@ def _validate_market_tables(
                 issues.append(ContractIssue("source_lineage_drift", str(source.get("source_id"))))
             else:
                 capture = _load_json(path, "source_lineage_unreadable")
-                if capture.get("capture_id") != source.get("capture_id") or capture.get("source_id") != source.get("source_id"):
+                if capture.get("capture_id") != source.get("capture_id") or capture.get(
+                    "source_id"
+                ) != source.get("source_id"):
                     issues.append(ContractIssue("source_lineage_identity", str(source.get("source_id"))))
                 elif capture.get("adapter") == "kaggle_cc0":
                     stable = capture.get("metadata_stable")
@@ -440,14 +492,21 @@ def _validate_market_tables(
                         or sha256_bytes(canonical_json(stable)) != capture.get("metadata_stable_sha256")
                         or expected_capture != capture.get("capture_id")
                     ):
-                        issues.append(ContractIssue("source_lineage_content_identity", str(source.get("source_id"))))
+                        issues.append(
+                            ContractIssue("source_lineage_content_identity", str(source.get("source_id")))
+                        )
                 elif capture.get("adapter") == "local_file":
                     expected_identity = {
-                        "adapter_version": 2, "mapping": capture.get("mapping"),
+                        "adapter_version": 2,
+                        "mapping": capture.get("mapping"),
                         "captured_at": capture.get("captured_at"),
                     }
-                    if capture.get("capture_identity") != expected_identity or content_id("capture", expected_identity) != capture.get("capture_id"):
-                        issues.append(ContractIssue("source_lineage_content_identity", str(source.get("source_id"))))
+                    if capture.get("capture_identity") != expected_identity or content_id(
+                        "capture", expected_identity
+                    ) != capture.get("capture_id"):
+                        issues.append(
+                            ContractIssue("source_lineage_content_identity", str(source.get("source_id")))
+                        )
         except MarketContractError as exc:
             issues.extend(exc.issues)
     return issues
@@ -462,17 +521,21 @@ def validate_snapshot(root: Path, gate: str = "reconstruction") -> dict[str, Any
         issues.append(ContractIssue("manifest_version", str(manifest.get("schema_version"))))
     if manifest.get("normalizer_version") != 2:
         issues.append(ContractIssue("normalizer_version", str(manifest.get("normalizer_version"))))
-    expected_snapshot_id = content_id("market", {
-        "normalizer_version": manifest.get("normalizer_version"),
-        "captures": sorted(
-            (source.get("capture_id"), source.get("capture_sha256"))
-            for source in manifest.get("sources", [])
-        ),
-        "window": manifest.get("requested_window"),
-        "universe_sha256": manifest.get("universe_sha256"),
-        "actions_sha256": manifest.get("actions_sha256"),
-        "gate": gate, "captured_at": manifest.get("captured_at"),
-    })
+    expected_snapshot_id = content_id(
+        "market",
+        {
+            "normalizer_version": manifest.get("normalizer_version"),
+            "captures": sorted(
+                (source.get("capture_id"), source.get("capture_sha256"))
+                for source in manifest.get("sources", [])
+            ),
+            "window": manifest.get("requested_window"),
+            "universe_sha256": manifest.get("universe_sha256"),
+            "actions_sha256": manifest.get("actions_sha256"),
+            "gate": gate,
+            "captured_at": manifest.get("captured_at"),
+        },
+    )
     if manifest.get("snapshot_id") != expected_snapshot_id:
         issues.append(ContractIssue("snapshot_identity", str(manifest.get("snapshot_id"))))
     if gate not in GATES or manifest.get("gate") != gate:

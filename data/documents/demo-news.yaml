@@ -2,8 +2,8 @@
 # project-authored summaries, never copied article bodies.
 adapter: local_news_metadata
 vintage_status: reconstructed_later
-provider: Reuters public syndication pages
-attribution_url: https://www.reuters.com/
+provider: Investing.com and MarketScreener syndicated Reuters pages
+attribution_url: https://www.investing.com/
 license_id: demo-reconstruction-no-license-claim
 redistribution: metadata_only
 file:

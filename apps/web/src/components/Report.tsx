@@ -1,7 +1,9 @@
 import { useState, type ReactNode } from "react";
-import type { Citation, Report } from "../api/types";
+import type { Citation, Report, ToolSummary } from "../api/types";
+import { formatDuration, words } from "../format";
 import { ArtifactView } from "./ArtifactView";
 import { EvidenceDrawer } from "./EvidenceDrawer";
+import "./report.css";
 
 function emphasizedText(value: string): ReactNode[] {
   const rendered: ReactNode[] = [];
@@ -21,7 +23,7 @@ function emphasizedText(value: string): ReactNode[] {
  * Unsupported Markdown is ordinary React text. There is deliberately no HTML,
  * link, image, code, quote, table, nesting, or general Markdown parser here.
  */
-export function LimitedMarkdown({ value, className, testId }: { value: string; className?: string; testId?: string }) {
+export function LimitedMarkdown({ value, className }: { value: string; className?: string }) {
   const lines = value.replaceAll("\r\n", "\n").split("\n");
   const blocks: ReactNode[] = [];
   const heading = /^(##|###) ([^#].*)$/;
@@ -63,82 +65,41 @@ export function LimitedMarkdown({ value, className, testId }: { value: string; c
     }
     blocks.push(<p key={`paragraph-${start}`}>{emphasizedText(paragraph.join(" "))}</p>);
   }
-  return <div className={["limited-markdown", className].filter(Boolean).join(" ")} data-report-summary={testId === "summary" ? "" : undefined}>{blocks}</div>;
+  return <div className={["limited-markdown", className].filter(Boolean).join(" ")}>{blocks}</div>;
 }
 
-const routeName = (value: string) => value === "local_only"
-  ? "Local Nemotron"
-  : value === "frontier_only"
-    ? "Frontier model"
-    : "Switchyard escalation";
-
-const sentence = (value: string) => value.replaceAll("_", " ");
-
-const confidenceLabel = (value: number) => value >= 0.8 ? "High confidence" : value >= 0.6 ? "Moderate confidence" : "Low confidence";
-
-export function ReportView({ report }: { report: Report }) {
-  const [selected, setSelected] = useState<Citation | null>(null);
-  const citationsById = new Map(report.citations.map((citation) => [citation.citation_id, citation]));
-  const claimedCitationIds = new Set(report.claims.flatMap((claim) => claim.citation_ids));
-  const additionalCitations = report.citations.filter((citation) => !claimedCitationIds.has(citation.citation_id));
-
+function ToolResult({ tool }: { tool: ToolSummary }) {
   return (
-    <article className="report" data-report="final" data-answer-mode={report.answer_mode} data-route-mode={report.routing.effective_mode}>
+    <li className={`tool-result ${tool.outcome}`}>
+      <div className="tool-result-heading">
+        <strong>{words(tool.tool)}</strong>
+        <span>{tool.ticker} · {words(tool.outcome)}</span>
+      </div>
+      <p>{tool.summary}</p>
+      {tool.receipt && (
+        <p className="gpu-receipt" aria-label="GPU receipt">
+          {tool.receipt.engine} on {tool.receipt.device} · {formatDuration(tool.receipt.duration_ms)}
+        </p>
+      )}
+      {tool.limitations.length > 0 && <ul className="tool-limitations">{tool.limitations.map((item) => <li key={item}>{item}</li>)}</ul>}
+    </li>
+  );
+}
+
+export function ReportView({ report, onAsk }: { report: Report; onAsk?: (question: string) => void }) {
+  const [selected, setSelected] = useState<Citation | null>(null);
+  return (
+    <article className="report" aria-label="Agent answer">
       <header className="report-header">
         <div className="assistant-label"><span className="assistant-mark">N</span><strong>Market Shock</strong></div>
-        <span className="route">{routeName(report.routing.effective_mode)}</span>
+        {report.kind === "guide" && <span className="route">Research guide</span>}
       </header>
-
-      <h2 data-report-title="">{report.title}</h2>
-      <LimitedMarkdown value={report.summary} className="summary" testId="summary" />
-      {report.no_data_reasons.length > 0 && <ul className="no-data-reasons" aria-label="No-data reasons">{report.no_data_reasons.map((reason) => <li data-no-data-reason={reason} key={reason}>No-data reason: {sentence(reason)}</li>)}</ul>}
-
-      <section>
-        <h3>Evidence-backed findings</h3>
-        <div className="claims">
-          {report.claims.map((claim) => (
-            <article
-              className={`claim ${claim.kind}`}
-              data-claim-id={claim.claim_id}
-              data-claim-kind={claim.kind}
-              data-claim-confidence={claim.confidence}
-              key={claim.claim_id}
-            >
-              <div className="claim-meta">
-                <span>{claim.kind}</span>
-                <span>{confidenceLabel(claim.confidence)}</span>
-              </div>
-              {report.claims.length === 1 && claim.text === report.summary
-                ? <p className="claim-evidence-label">Evidence supporting the answer above</p>
-                : <LimitedMarkdown value={claim.text} className="claim-body" />}
-              {claim.citation_ids.length > 0 && (
-                <nav aria-label="Claim citations">
-                  {claim.citation_ids.map((id) => {
-                    const citation = citationsById.get(id);
-                    return citation ? (
-                      <button data-citation-id={id} key={id} onClick={() => setSelected(citation)}>
-                        <span>[{report.citations.indexOf(citation) + 1}]</span> {citation.title}
-                      </button>
-                    ) : null;
-                  })}
-                </nav>
-              )}
-            </article>
-          ))}
-        </div>
-      </section>
+      <LimitedMarkdown value={report.answer} className="summary" />
 
       {report.artifacts.length > 0 && (
-        <section>
-          <h3>Visual artifacts</h3>
-          <div className="artifacts">
-            {report.artifacts.map((artifact) => (
-              <figure key={artifact.artifact_id}>
-                <figcaption>{artifact.title}</figcaption>
-                <ArtifactView artifact={artifact} />
-              </figure>
-            ))}
-          </div>
+        <section aria-label="Measured tool output">
+          <h3>Measured tool output</h3>
+          <div className="artifacts">{report.artifacts.map((artifact) => <ArtifactView artifact={artifact} key={artifact.artifact_id} />)}</div>
         </section>
       )}
 
@@ -149,17 +110,37 @@ export function ReportView({ report }: { report: Report }) {
         </section>
       )}
 
-      {additionalCitations.length > 0 && (
+      {report.citations.length > 0 && (
         <section className="sources-inventory">
           <h3>Sources</h3>
-          <p className="muted">Additional evidence retained in the report inventory.</p>
-          <nav aria-label="Additional report sources">
-            {additionalCitations.map((citation) => (
-              <button data-citation-id={citation.citation_id} key={citation.citation_id} onClick={() => setSelected(citation)}>
-                <span>[{report.citations.indexOf(citation) + 1}]</span> {citation.title}
+          <nav aria-label="Cited sources">
+            {report.citations.map((citation, index) => (
+              <button type="button" key={citation.citation_id} onClick={() => setSelected(citation)}>
+                <span>[{index + 1}]</span> {citation.title}
               </button>
             ))}
           </nav>
+        </section>
+      )}
+
+      {report.tools.length > 0 && (
+        <section className="tool-results">
+          <h3>Tool results</h3>
+          <ul>{report.tools.map((tool, index) => <ToolResult tool={tool} key={`${tool.tool}-${tool.ticker}-${index}`} />)}</ul>
+        </section>
+      )}
+
+      {report.limitations.length > 0 && (
+        <section className="report-limitations">
+          <h3>Limitations</h3>
+          <ul>{report.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
+        </section>
+      )}
+
+      {onAsk && report.suggested_questions.length > 0 && (
+        <section className="suggested-questions">
+          <h3>Suggested follow-ups</h3>
+          <div>{report.suggested_questions.map((question) => <button type="button" key={question} onClick={() => onAsk(question)}>{question}</button>)}</div>
         </section>
       )}
 

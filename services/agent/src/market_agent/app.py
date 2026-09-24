@@ -1,106 +1,104 @@
+"""The agent's HTTP API (served on :2024, reached by the browser through web's /api proxy)."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import date
+import logging
 from contextlib import asynccontextmanager
-import os
-from pathlib import Path
-import re
+from time import monotonic
+from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException, Response
-from .api import router as investigation_router; from .checkpoint import CheckpointStore
-from .config import LOCAL_MODEL, LUNA_MODEL, CAPABLE_MODEL, Settings; from .coverage import EMBED_MODEL, EMBED_REVISION
-from .dashboard import router as dashboard_router
-from .dependencies import probe; from .evidence import EvidenceExecutor
-from .deep_runtime import MarketDeepAgent, SKILL_ID; from .mcp_client import MarketToolClient
-from .event_catalog import EventCatalogError, ShockEventCatalog
+import httpx
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from mcp import Client
+
+from .agent import MarketAgent
+from .catalog import Coverage, EventCatalog
+from .config import (
+    CAPABLE_MODEL,
+    EMBED_MODEL,
+    JUDGE_MODEL,
+    LOCAL_MODEL,
+    MAX_TURNS,
+    MODEL_URL,
+    SPECULATOR_MODEL,
+    TOOLS_URL,
+    Settings,
+)
 from .relay_tracing import RelayTracing
-from .security import BOUNDARY_DESTINATIONS; from .state import StateStore
-from .schemas import MAX_INVESTIGATION_TURNS
-from .generation_health import generation_health
+from .runner import Busy, Runner, fail_interrupted, new_investigation
+from .schemas import CreateInvestigation, FollowUp, Investigation
+from .scope import ScopeError, follow_up, resolve
+from .store import Store, load_key, open_checkpointer
 
-settings = Settings.from_env(); relay_tracing = RelayTracing(); status = {"tools": False, "model": False, "event_catalog": False, "mode": "starting"}
-APP_VERSION = "1.2.0"
-PRIMARY_COMPANIES = (
-    ("NVDA", "NVIDIA"), ("AMD", "Advanced Micro Devices"), ("JPM", "JPMorgan Chase"),
-    ("GS", "Goldman Sachs"), ("SCHW", "Charles Schwab"),
+log = logging.getLogger(__name__)
+REMOTE_REQUIRED = (
+    "Research needs the remote routing endpoint: NeMo Switchyard asks a remote judge model to review "
+    "every agent step. Set REMOTE_ROUTING_ENABLED=true with NVIDIA_BASE_URL and NVIDIA_INFERENCE_API_KEY."
 )
-LANGSMITH_PROJECT_LINK_PATTERN = re.compile(
-    r"https://smith\.langchain\.com/o/[A-Za-z0-9-]+/projects/p/[A-Za-z0-9-]+"
-)
-
-
-_PUBLIC_MODELS = [
-    {"model_id": LOCAL_MODEL, "revision": "bee7596271d1495f6992ae224aefde4410e816b8", "location": "local_model_service", "identity_basis": "immutable_revision", "roles": ["local_generation", "switchyard_efficient_target"], "route_eligible": True, "dependency": "model"},
-    {"model_id": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark", "revision": "8a0177116d138011e63103110f136ec0ca09ebbf", "location": "local_model_service", "identity_basis": "immutable_revision", "roles": ["speculative_assistant"], "route_eligible": False, "dependency": "model"},
-    {"model_id": EMBED_MODEL, "revision": EMBED_REVISION, "location": "local_tools_service", "identity_basis": "immutable_revision", "roles": ["retrieval_embedding"], "route_eligible": False, "dependency": "tools"},
-    {"model_id": LUNA_MODEL, "revision": None, "location": "internal_inference_server", "identity_basis": "exact_server_route_id", "roles": ["switchyard_classifier"], "route_eligible": True, "dependency": "remote_routing"},
-    {"model_id": CAPABLE_MODEL, "revision": None, "location": "internal_inference_server", "identity_basis": "exact_server_route_id", "roles": ["switchyard_capable_target", "report_formatter"], "route_eligible": True, "dependency": "remote_routing"},
-]
-
-
-def _langsmith_project_link() -> str | None:
-    if not relay_tracing.settings.langsmith_enabled:
-        return None
-    value = os.getenv("LANGSMITH_PROJECT_URL", "").strip()
-    if not LANGSMITH_PROJECT_LINK_PATTERN.fullmatch(value):
-        raise RuntimeError("invalid LangSmith project link")
-    return value
-
-
-def _assert_public_status(value, *, private_values=(), safe_project_link=None):
-    unsafe_fields = {"url", "uri", "endpoint", "key", "token", "secret", "credential", "password", "host"}
-    private = tuple(item for item in private_values if isinstance(item, str) and item)
-    if safe_project_link is not None and not LANGSMITH_PROJECT_LINK_PATTERN.fullmatch(safe_project_link):
-        raise RuntimeError("unsafe status contract project link")
-
-    def visit(item, *, field=None):
-        if isinstance(item, dict):
-            if any(not isinstance(key, str) or unsafe_fields & set(key.lower().replace("-", "_").split("_")) for key in item): raise RuntimeError("unsafe status contract field")
-            for key, child in item.items(): visit(child, field=key)
-            return
-        elif isinstance(item, (list, tuple)):
-            for child in item: visit(child)
-            return
-        elif isinstance(item, str):
-            lowered = item.lower()
-            unsafe_value = any(term in lowered for term in ("bearer ", "api_key", "api-key", "credential", "password", "secret"))
-            approved_link = field == "project_link" and item == safe_project_link
-            if "llama" in lowered or ("://" in lowered and not approved_link) or unsafe_value or any(secret in item for secret in private): raise RuntimeError("unsafe status contract value")
-            return
-        return
-
-    visit(value)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    catalog = settings.load_coverage()
-    event_catalog, event_catalog_error = None, "event_catalog_unconfigured"
-    event_root = getattr(settings, "event_catalog_root", None)
-    if isinstance(event_root, Path):
-        try:
-            event_catalog = ShockEventCatalog.load(event_root, catalog)
-            event_catalog_error = None
-        except EventCatalogError as exc:
-            event_catalog_error = exc.code
-    store = StateStore(settings.state_root / "investigations.sqlite3", settings.state_root / "agent.key")
-    checkpoints = CheckpointStore(settings.state_root / "checkpoints.sqlite3", settings.state_root / "agent.key")
-    mcp_client = MarketToolClient(settings.tools_url)
-    app.state.store, app.state.running, app.state.catalog = store, {}, catalog
-    app.state.event_catalog, app.state.event_catalog_error = event_catalog, event_catalog_error
-    app.state.market_tool_client = mcp_client
-    app.state.security_secrets = {"NVIDIA_INFERENCE_API_KEY": settings.remote_key} if settings.remote_key else {}; app.state.security_boundaries = dict(BOUNDARY_DESTINATIONS)
+    settings = Settings.from_env()
+    coverage = Coverage.load(settings.scenario_root)
     try:
-        await relay_tracing.start()
-        checkpointer = await checkpoints.open()
-        app.state.investigator = MarketDeepAgent(settings, catalog, EvidenceExecutor(await mcp_client.open(), catalog), checkpointer, event_catalog)
-        status.update(await probe(settings))
-        status.update({"checkpoint": True, "mcp_contract": True, "coverage": True, "event_catalog": event_catalog is not None, "mode": "ready" if status["tools"] and status["model"] and event_catalog is not None else "degraded"})
+        events = EventCatalog.load(settings.events_root, coverage)
+    except Exception:
+        log.exception("curated event catalog unavailable")
+        events = None
+    key = load_key(settings.state_root / "agent.key")
+    store = Store(settings.state_root / "investigations.sqlite3", key, settings.secrets)
+    fail_interrupted(store)
+    checkpointer, connection = await open_checkpointer(settings.state_root / "checkpoints.sqlite3", key)
+    tracing = RelayTracing()
+    await tracing.start()
+    agent = MarketAgent(settings, coverage, checkpointer) if settings.remote_enabled else None
+    app.state.settings, app.state.coverage, app.state.events = settings, coverage, events
+    app.state.store, app.state.runner = store, Runner(store, agent, coverage)
+    app.state.health = {"checked": 0.0}
+    try:
         yield
     finally:
-        await mcp_client.close(); await checkpoints.close(); await relay_tracing.shutdown(); store.close()
+        await connection.close()
+        await tracing.shutdown()
+        store.close()
 
 
-app = FastAPI(title="Market Shock Investigator", version=APP_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
-app.include_router(investigation_router)
-app.include_router(dashboard_router)
+app = FastAPI(title="Market Shock Research Agent", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+
+# Health ---------------------------------------------------------------------
+
+
+async def dependencies(request: Request) -> dict[str, bool]:
+    """Tools and local model reachability, cached for a few seconds."""
+    health = request.app.state.health
+    if monotonic() - health["checked"] < 5:
+        return health["value"]
+    value = {"tools": False, "model": False, "events": request.app.state.events is not None}
+    async with httpx.AsyncClient(timeout=3) as client:
+        try:
+            value["tools"] = (await client.get(TOOLS_URL.removesuffix("/mcp") + "/health")).status_code == 200
+        except httpx.HTTPError:
+            pass
+        try:
+            models = (await client.get(MODEL_URL + "/models")).json().get("data", [])
+            value["model"] = any(item.get("id") == LOCAL_MODEL for item in models)
+        except (httpx.HTTPError, ValueError):
+            pass
+    health.update(checked=monotonic(), value=value)
+    return value
+
+
+def not_ready_reason(request: Request, deps: dict[str, bool]) -> str | None:
+    if not request.app.state.settings.remote_enabled:
+        return "remote_routing_disabled"
+    missing = [name for name, ok in deps.items() if not ok]
+    return f"unavailable: {', '.join(missing)}" if missing else None
 
 
 @app.get("/health/live")
@@ -109,71 +107,160 @@ async def live():
 
 
 @app.get("/health/ready")
-async def ready(response: Response, verify_generation: bool = False, require_idle: bool = False,
-                maintenance_token: str | None = Header(default=None, alias="X-Market-Maintenance-Token")):
-    maintenance_token = maintenance_token if isinstance(maintenance_token, str) else None
-    if verify_generation and require_idle:
-        raise HTTPException(status_code=400, detail="readiness probes must select generation or idle verification")
-    if require_idle:
-        idle = generation_health.owner is None and not generation_health.checking and generation_health.maintenance is None
-        if not idle: response.status_code = 409
-        return {"service": "agent", "idle": idle}
-    if maintenance_token is not None and not verify_generation:
-        raise HTTPException(status_code=400, detail="maintenance token is only valid for generation verification")
-    if verify_generation: generation_health.request_fresh_check(maintenance_token)
-    status.update(await probe(settings, maintenance_token=maintenance_token))
-    ok = status["tools"] and status["model"] and bool(getattr(app.state, "event_catalog", None))
-    status["mode"] = "ready" if ok else "degraded"
-    if not ok: response.status_code = 503
-    return {"service": "agent", "ready": ok, **status}
+async def ready(request: Request):
+    deps = await dependencies(request)
+    reason = not_ready_reason(request, deps)
+    return {"service": "agent", "ready": reason is None, "reason": reason, **deps}
 
 
 @app.get("/api/status")
-async def api_status():
-    observed = await probe(settings, verify_generation=False); status.update({key: bool(observed.get(key)) for key in ("tools", "model")})
-    catalog = app.state.catalog
-    if tuple(catalog.targets) != tuple(symbol for symbol, _ in PRIMARY_COMPANIES) or settings.local_model != LOCAL_MODEL or getattr(settings, "remote_model", CAPABLE_MODEL) not in {None, CAPABLE_MODEL} or getattr(settings, "judge_model", LUNA_MODEL) != LUNA_MODEL:
-        raise RuntimeError("invalid status contract configuration")
-    dependencies = {key: bool(status.get(key)) for key in ("tools", "model", "coverage", "checkpoint", "mcp_contract", "event_catalog")}
-    common_ready = all(dependencies[key] for key in ("tools", "coverage", "checkpoint", "mcp_contract", "event_catalog"))
-    switchyard_enabled = common_ready and dependencies["model"] and settings.remote_enabled
-    project_link = _langsmith_project_link()
-    observability = {
-        "remote_inference_enabled": bool(settings.remote_enabled),
-        "langsmith_export_enabled": bool(relay_tracing.settings.langsmith_enabled),
-    }
-    if project_link is not None:
-        observability["project_link"] = project_link
-    limitations = (["reconstructed_later_market_data"] if catalog.vintage_status == "reconstructed_later" else []) + (["licensed_news_unavailable"] if "licensed_news_metadata" not in catalog.document_source_kinds else []) + ["source_coverage_varies_by_ticker_and_cutoff"]
-    payload = {
-        "schema_version": "system-status-v1", "service": "agent", "version": APP_VERSION,
-        "ready": all(dependencies.values()) and bool(settings.remote_enabled),
-        "dependencies": dependencies, "remote_routing_enabled": settings.remote_enabled,
-        "observability": observability,
-        "investigations": "available", "supported_tickers": list(catalog.targets),
-        "companies": [{"symbol": symbol, "display_name": name} for symbol, name in PRIMARY_COMPANIES],
-        "coverage": {"scenario_id": catalog.scenario_id, "scenario_manifest_sha256": catalog.scenario_manifest_sha256, "data_tier": catalog.data_tier, "vintage_status": catalog.vintage_status,
-                     "first_session": catalog.sessions[0].session_date.isoformat(), "last_session": catalog.sessions[-1].session_date.isoformat(), "session_count": len(catalog.sessions), "document_source_kinds": list(catalog.document_source_kinds)},
-        "limitations": limitations, "models": list(_PUBLIC_MODELS),
-        "routes": [{"mode": "switchyard_escalation", "enabled": switchyard_enabled, "disabled_reason": None if switchyard_enabled else "remote_routing_disabled" if not settings.remote_enabled else "required_dependencies_unavailable", "model_roles": ["switchyard_classifier", "local_generation", "switchyard_capable_target", "report_formatter"], "evidence_tools_unchanged": True}],
-        "contracts": {
-            "max_investigation_turns": MAX_INVESTIGATION_TURNS,
-            "max_concurrent_investigations": 1,
-            "data": catalog.scenario_id, "skill": SKILL_ID, "prompt": "market-shock-grounded-synthesis/2.0.0", "safety": "bounded-equity-research/1.0.0",
-            "generation_model": settings.local_model, "embedding_model": EMBED_MODEL, "embedding_revision": EMBED_REVISION,
+async def status(request: Request):
+    settings, coverage = request.app.state.settings, request.app.state.coverage
+    deps = await dependencies(request)
+    reason = not_ready_reason(request, deps)
+    return {
+        "ready": reason is None,
+        "reason": REMOTE_REQUIRED if reason == "remote_routing_disabled" else reason,
+        "remote_routing_enabled": settings.remote_enabled,
+        "dependencies": deps,
+        "companies": coverage.companies(),
+        "coverage": {
+            "scenario_id": coverage.scenario_id,
+            "first_session": coverage.first_session.isoformat(),
+            "last_session": coverage.last_session.isoformat(),
         },
+        "models": [
+            {"id": LOCAL_MODEL, "role": "agent reasoning", "where": "local"},
+            {"id": SPECULATOR_MODEL, "role": "speculative decoding", "where": "local"},
+            {"id": EMBED_MODEL, "role": "document embeddings", "where": "local"},
+            {"id": JUDGE_MODEL, "role": "Switchyard routing judge", "where": "remote"},
+            {"id": CAPABLE_MODEL, "role": "escalated reasoning", "where": "remote"},
+        ],
+        "max_turns": MAX_TURNS,
+        "langsmith_project_url": settings.langsmith_project_url,
     }
-    remote_key = settings.remote_key.get_secret_value() if settings.remote_key and hasattr(settings.remote_key, "get_secret_value") else settings.remote_key
-    _assert_public_status(payload, private_values=(getattr(settings, "remote_url", None), remote_key), safe_project_link=project_link); return payload
 
 
-@app.post("/health/maintenance")
-async def acquire_maintenance():
-    return {"service": "agent", **generation_health.acquire_maintenance()}
+# Reference data --------------------------------------------------------------
 
 
-@app.delete("/health/maintenance")
-async def release_maintenance(
-    maintenance_token: str | None = Header(default=None, alias="X-Market-Maintenance-Token"),
-):
-    return {"service": "agent", **generation_health.release_maintenance(maintenance_token)}
+@app.get("/api/shock-events")
+async def shock_events(request: Request):
+    events: EventCatalog | None = request.app.state.events
+    if events is None:
+        raise HTTPException(
+            503, "Curated events are unavailable; you can still ask about any supported company."
+        )
+    return events.public()
+
+
+@app.get("/api/dashboard")
+async def dashboard(ticker: str, as_of: date, request: Request):
+    coverage = request.app.state.coverage
+    if ticker not in coverage.targets:
+        raise HTTPException(422, f"Choose one of {', '.join(coverage.targets)}.")
+    if not coverage.first_session <= as_of <= coverage.last_session:
+        raise HTTPException(422, f"Choose a date from {coverage.first_session} to {coverage.last_session}.")
+    async with Client(TOOLS_URL, read_timeout_seconds=60) as client:
+        result = await client.read_resource(f"market://dashboard/{ticker}/{as_of.isoformat()}")
+    contents = list(result.contents)
+    text = getattr(contents[0], "text", None) if contents else None
+    if not isinstance(text, str):
+        raise HTTPException(502, "The tools service returned no dashboard.")
+    return json.loads(text)
+
+
+# Investigations ---------------------------------------------------------------
+
+
+def _load(request: Request, investigation_id: UUID) -> Investigation:
+    investigation = request.app.state.store.get(investigation_id)
+    if investigation is None:
+        raise HTTPException(404, "Investigation not found.")
+    return investigation
+
+
+def _with_events(request: Request, investigation: Investigation) -> Investigation:
+    return investigation.model_copy(
+        update={"events": request.app.state.store.events(investigation.investigation_id)}
+    )
+
+
+def _start(request: Request, investigation: Investigation, question: str, *, retry: bool = False) -> None:
+    if not request.app.state.settings.remote_enabled:
+        raise HTTPException(503, REMOTE_REQUIRED)
+    try:
+        request.app.state.runner.start(investigation, question, retry=retry)
+    except Busy as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/investigations", status_code=202, response_model=Investigation)
+async def create_investigation(body: CreateInvestigation, request: Request):
+    try:
+        scope = resolve(body, request.app.state.coverage, request.app.state.events)
+    except ScopeError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    investigation = new_investigation(scope)
+    _start(request, investigation, body.question)
+    return _with_events(request, investigation)
+
+
+@app.get("/api/investigations/{investigation_id}", response_model=Investigation)
+async def get_investigation(investigation_id: UUID, request: Request):
+    return _with_events(request, _load(request, investigation_id))
+
+
+@app.post("/api/investigations/{investigation_id}/turns", status_code=202, response_model=Investigation)
+async def add_turn(investigation_id: UUID, body: FollowUp, request: Request):
+    investigation = _load(request, investigation_id)
+    if investigation.status == "running":
+        raise HTTPException(409, "This investigation is still running.")
+    if len(investigation.turns) >= MAX_TURNS:
+        raise HTTPException(409, f"An investigation holds up to {MAX_TURNS} questions. Start a new one.")
+    investigation.scope = follow_up(investigation.scope, body.question, request.app.state.coverage)
+    _start(request, investigation, body.question)
+    return _with_events(request, investigation)
+
+
+@app.post("/api/investigations/{investigation_id}/retry", status_code=202, response_model=Investigation)
+async def retry(investigation_id: UUID, request: Request):
+    investigation = _load(request, investigation_id)
+    if investigation.status not in {"failed", "cancelled"}:
+        raise HTTPException(409, "Only a failed or cancelled question can be retried.")
+    _start(request, investigation, investigation.turns[-1].question, retry=True)
+    return _with_events(request, investigation)
+
+
+@app.post("/api/investigations/{investigation_id}/cancel", response_model=Investigation)
+async def cancel(investigation_id: UUID, request: Request):
+    _load(request, investigation_id)
+    await request.app.state.runner.cancel(investigation_id)
+    return _with_events(request, _load(request, investigation_id))
+
+
+@app.get("/api/investigations/{investigation_id}/stream")
+async def stream(investigation_id: UUID, request: Request, last_event_id: str | None = Header(default=None)):
+    """Server-sent progress events until the running turn finishes (resumable with Last-Event-ID)."""
+    _load(request, investigation_id)
+    store, runner = request.app.state.store, request.app.state.runner
+
+    async def events():
+        after = int(last_event_id) if last_event_id and last_event_id.isdigit() else 0
+        while True:
+            seen = runner.version
+            for event in store.events(investigation_id, after):
+                after = event.sequence
+                yield f"id: {after}\nevent: progress\ndata: {event.model_dump_json()}\n\n"
+            investigation = store.get(investigation_id)
+            if investigation.status != "running" and runner.running_id != investigation_id:
+                yield f"event: done\ndata: {json.dumps({'status': investigation.status})}\n\n"
+                return
+            if await request.is_disconnected():
+                return
+            try:
+                await runner.wait_for_change(seen)
+            except asyncio.CancelledError:
+                return
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})

@@ -4,7 +4,7 @@ source "$(dirname "$0")/lib.sh"
 
 [[ $# -eq 0 ]] || spark_die "usage: $0"
 spark_require_operator_tools
-spark_require_four_services
+spark_require_compose_services
 spark_require_public_boundary
 
 build_snapshot="$(mktemp -d /tmp/market-shock-build.XXXXXX)"

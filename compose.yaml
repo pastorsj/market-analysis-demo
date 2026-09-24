@@ -1,41 +1,50 @@
 name: market-shock
+# The agent (agent:2024) is not a Compose service: OpenShell runs it from the
+# market-shock-agent image (scripts/spark/openshell_runtime.py) with the
+# environment prepared by scripts/spark/openshell_config.py.
 services:
   web:
     build:
       context: ./apps/web
-      args: {MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_WEB_BUILD_INPUT_SHA256:-unverified}"}
-    ports: ["127.0.0.1:${WEB_PORT:-3000}:3000"]
+      args:
+        MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_WEB_BUILD_INPUT_SHA256:-unverified}"
+    ports: ["127.0.0.1:3000:3000"]
     networks: [edge]
     extra_hosts: ["agent:${AGENT_FORWARD_HOST:-127.0.0.1}"]
     restart: unless-stopped
-    healthcheck: {test: ["CMD","wget","-qO-","http://127.0.0.1:3000/health"], interval: 10s, timeout: 3s, retries: 12}
-  agent:
-    # Image/configuration role only. OpenShell owns the actual agent process.
-    profiles: [image-only]
-    entrypoint: [/bin/false]
-    build:
-      context: ./services/agent
-      args: {MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_AGENT_BUILD_INPUT_SHA256:-unverified}"}
-    expose: ["2024"]
-    networks: [edge, backend]
-    restart: "no"
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    environment: {HOME: /tmp, REMOTE_ROUTING_ENABLED: "${REMOTE_ROUTING_ENABLED:-false}", NVIDIA_BASE_URL: "${NVIDIA_BASE_URL:-}", NVIDIA_INFERENCE_API_KEY: "${NVIDIA_INFERENCE_API_KEY:-}", LLM_MODEL: "${LLM_MODEL:-nvidia/nvidia/nemotron-3-ultra}", SWITCHYARD_JUDGE_MODEL: "${SWITCHYARD_JUDGE_MODEL:-openai/openai/gpt-5.6-luna}", MARKET_SHOCK_STATE_ROOT: /srv/market-shock/state, MARKET_SHOCK_SCENARIO_ROOT: /srv/market-shock/scenario, MARKET_SHOCK_EVENT_CATALOG_ROOT: /srv/market-shock/events/current, MARKET_SHOCK_DATA_GATE: reconstruction, NEMO_RELAY_TRACE_DIRECTORY: /srv/market-shock/traces, NEMO_RELAY_LANGSMITH_ENABLED: "${LANGSMITH_TRACING:-false}", LANGSMITH_API_KEY: "${LANGSMITH_API_KEY:-}", LANGSMITH_PROJECT: "${LANGSMITH_PROJECT:-}", LANGSMITH_PROJECT_URL: "${LANGSMITH_PROJECT_URL:-}", LANGSMITH_ENDPOINT: "${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}"}
-    volumes: ["/srv/market-shock/scenario:/srv/market-shock/scenario:ro", "/srv/market-shock/events:/srv/market-shock/events:ro", "/srv/market-shock/state:/srv/market-shock/state", "/srv/market-shock/traces:/srv/market-shock/traces"]
-    depends_on: {tools: {condition: service_healthy}, model: {condition: service_healthy}}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
   tools:
     build:
       context: ./services/tools
-      args: {MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_TOOLS_BUILD_INPUT_SHA256:-unverified}"}
+      args:
+        MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_TOOLS_BUILD_INPUT_SHA256:-unverified}"
     expose: ["8000"]
     networks: [backend, openshell]
     restart: unless-stopped
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ipc: host
-    environment: {HOME: /tmp, MARKET_SHOCK_ROOT: /srv/market-shock, MARKET_TOOLS_STRICT_GPU: "true", NEMOTRON_EMBED_PATH: /srv/market-shock/models/hf/nemotron-3-embed-1b-bf16-9e0b248}
+    environment:
+      HOME: /tmp
+      MARKET_SHOCK_ROOT: /srv/market-shock
+      MARKET_TOOLS_STRICT_GPU: "true"
+      NEMOTRON_EMBED_PATH: /srv/market-shock/models/hf/nemotron-3-embed-1b-bf16-9e0b248
     volumes: ["/srv/market-shock:/srv/market-shock:ro"]
-    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"], interval: 10s, timeout: 3s, retries: 30, start_period: 180s}
-    deploy: {resources: {reservations: {devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]}}}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+      start_period: 180s
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+
   model:
     image: vllm/vllm-openai:v0.27.1@sha256:0a51ea5b4ae2dc5d81890e5173f54203d2a3ae0cfffe51b8fd2afd4391bfd967
     expose: ["8001"]
@@ -43,10 +52,53 @@ services:
     restart: unless-stopped
     ipc: host
     shm_size: 16gb
-    volumes: ["/srv/market-shock/models/hf:/models:ro", "/srv/market-shock/cache/vllm:/root/.cache/vllm"]
-    command: ["--model","/models/nemotron-3.5-lightning-nvfp4-bee7596","--served-model-name","nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4","--port","8001","--moe-backend","marlin","--kv-cache-dtype","fp8","--enable-prefix-caching","--max-model-len","32768","--max-num-seqs","2","--gpu-memory-utilization","0.65","--speculative_config.model","/models/nemotron-3.5-lightning-dspark-8a01771","--speculative_config.num_speculative_tokens","3","--mamba-backend","flashinfer","--mamba-cache-mode","align","--reasoning-parser","nemotron_v3","--enable-auto-tool-choice","--tool-call-parser","qwen3_coder","--structured-outputs-config","{\"backend\":\"xgrammar\",\"disable_any_whitespace\":true}"]
-    healthcheck: {test: ["CMD","python3","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"], interval: 15s, timeout: 5s, retries: 60, start_period: 300s}
-    deploy: {resources: {reservations: {devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]}}}
+    volumes:
+      - /srv/market-shock/models/hf:/models:ro
+      - /srv/market-shock/cache/vllm:/root/.cache/vllm
+    command:
+      - --model
+      - /models/nemotron-3.5-lightning-nvfp4-bee7596
+      - --served-model-name
+      - nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4
+      - --port
+      - "8001"
+      - --moe-backend
+      - marlin
+      - --kv-cache-dtype
+      - fp8
+      - --enable-prefix-caching
+      - --max-model-len
+      - "32768"
+      - --max-num-seqs
+      - "2"
+      - --gpu-memory-utilization
+      - "0.65"
+      - --speculative_config.model
+      - /models/nemotron-3.5-lightning-dspark-8a01771
+      - --speculative_config.num_speculative_tokens
+      - "3"
+      - --mamba-backend
+      - flashinfer
+      - --mamba-cache-mode
+      - align
+      - --reasoning-parser
+      - nemotron_v3
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen3_coder
+      - --structured-outputs-config
+      - '{"backend":"xgrammar","disable_any_whitespace":true}'
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
+    deploy:
+      resources:
+        reservations:
+          devices: [{driver: nvidia, count: 1, capabilities: [gpu]}]
+
 networks:
   edge: {}
   backend: {internal: true}

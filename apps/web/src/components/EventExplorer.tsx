@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { getShockEvents, type ShockEvent, type ShockEventCatalog } from "../api/events";
+import { api } from "../api/client";
+import type { ShockEvent, ShockEventCatalog } from "../api/types";
+import { dateLabel } from "../format";
 import "./event-explorer.css";
 
 export interface EventExplorerProps {
@@ -7,15 +9,9 @@ export interface EventExplorerProps {
   readonly availableTickers: readonly string[];
   readonly coverage: { readonly first_session: string; readonly last_session: string } | null;
   readonly onSelectEvent: (event: ShockEvent | null) => void;
-  readonly compact?: boolean;
 }
 
-function readableDate(value: string): string {
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
-export function EventExplorer({ selectedEvent, availableTickers, coverage, onSelectEvent, compact = false }: EventExplorerProps) {
+export function EventExplorer({ selectedEvent, availableTickers, coverage, onSelectEvent }: EventExplorerProps) {
   const [catalog, setCatalog] = useState<ShockEventCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +23,7 @@ export function EventExplorer({ selectedEvent, availableTickers, coverage, onSel
     let active = true;
     setLoading(true);
     setError(null);
-    void getShockEvents(controller.signal).then((value) => {
+    void api.shockEvents(controller.signal).then((value) => {
       if (!active) return;
       setCatalog(value);
     }).catch((reason: unknown) => {
@@ -54,19 +50,10 @@ export function EventExplorer({ selectedEvent, availableTickers, coverage, onSel
 
   return (
     <section className="event-explorer research-event-picker" aria-labelledby="event-explorer-title">
-      {compact ? (
-        <div className="event-picker-compact-heading">
-          <div><span className="dashboard-kicker">Curated research contexts</span><h2 id="event-explorer-title">Known shock scenarios</h2></div>
-          {catalog && <span>{catalog.summary.published_events} events</span>}
-        </div>
-      ) : <div className="event-explorer-heading">
-        <div>
-          <span className="dashboard-kicker">Curated research contexts</span>
-          <h2 id="event-explorer-title">Choose a known market shock</h2>
-          <p>Selecting a scenario populates its companies, analysis window, evidence cutoff, and suggested questions below. You can always write your own question.</p>
-        </div>
-        {catalog && <div className="event-count"><strong>{catalog.summary.published_events}</strong><span>Published events</span></div>}
-      </div>}
+      <div className="event-picker-compact-heading">
+        <div><span className="dashboard-kicker">Curated research contexts</span><h2 id="event-explorer-title">Known shock scenarios</h2></div>
+        {catalog && <span>{catalog.events.length} events</span>}
+      </div>
 
       {loading && <div className="event-catalog-state" role="status"><span className="dashboard-spinner" /><div><strong>Loading qualified events</strong><p>Reading the scenario-bound local catalog.</p></div></div>}
       {error && !loading && (
@@ -100,7 +87,7 @@ export function EventExplorer({ selectedEvent, availableTickers, coverage, onSel
                   onClick={() => onSelectEvent(event)}
                   key={event.event_id}
                 >
-                  <span className="event-card-top"><small>{readableDate(event.event_session)}</small><i className={event.qualification.status}>{event.qualification.status}</i></span>
+                  <span className="event-card-top"><small>{dateLabel(event.event_session)}</small><i className={event.status}>{event.status}</i></span>
                   <strong>{event.title}</strong>
                   <span className="event-card-tickers">{event.analysis_tickers.join(" · ")}</span>
                   <p>{event.summary}</p>

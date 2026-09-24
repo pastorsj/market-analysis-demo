@@ -18,9 +18,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.8.22"
+      - run: uvx ruff@0.15.0 check services scripts tests
+      - run: uvx ruff@0.15.0 format --check services scripts tests
       - run: >-
-          uv run --project services/agent --with pytest --with pytest-asyncio
-          pytest -q tests/agent tests/unit
+          uv run --project services/agent --with pytest --with pytest-asyncio --with numpy
+          pytest -q tests/agent tests/unit tests/tools
         env:
           PYTHONPATH: services/agent/src:services/tools/src:.
 

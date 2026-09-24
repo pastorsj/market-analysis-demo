@@ -1,95 +1,152 @@
 # Operations
 
-The public repository contains the application source and the prepared-runtime
-lifecycle. Model weights, private credentials, exhaustive qualification assets,
-and provisioning receipts are intentionally not distributed.
+These commands run on a DGX Spark that already has the prepared runtime under
+`/srv/market-shock`: model weights, scenario data, the event catalog, the vLLM
+image, and OpenShell 0.0.116 binaries. Model and data provisioning is not
+distributed in this repository.
 
-The commands below therefore apply to a DGX Spark that has already been
-provisioned from this exact source and has its immutable runtime beneath
-`/srv/market-shock`.
+All operator commands read `COMPOSE_ENV_FILE` if it is set, otherwise `.env`,
+otherwise `.env.spark.example`.
 
-## Start
+## Configure
 
-Connect the supplied power adapter, display, input devices, and the approved
-network before starting the workstation. Log in, then run:
+Copy `.env.spark.example` to `.env` (or point `COMPOSE_ENV_FILE` at a private
+file) and set:
+
+| Variable | Meaning |
+| --- | --- |
+| `REMOTE_ROUTING_ENABLED` | `true` to allow research. Default `false`. |
+| `NVIDIA_BASE_URL`, `NVIDIA_INFERENCE_API_KEY` | Endpoint serving the Luna judge and Nemotron 3 Ultra. Required when routing is on. |
+| `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT`, `LANGSMITH_PROJECT_URL`, `LANGSMITH_ENDPOINT` | Optional LangSmith export of Relay traces |
+
+Model IDs, ports, and service URLs are fixed in
+`services/agent/src/market_agent/config.py` and `compose.yaml`.
+
+## After a source or env change
+
+The agent image and its OpenShell receipt are bound to the source. After you
+change code or the env file, rebuild and re-prepare:
 
 ```bash
-cd market-analysis-demo
+scripts/spark/build-runtime.sh                        # build web/agent/tools images, pull the pinned vLLM image, write the image receipt
+./demo stop
+python3 scripts/spark/openshell_config.py             # providers (secrets) + sandbox env + prepared policy
+python3 scripts/spark/openshell_runtime.py prepare-receipt
 ./demo start --recreate-agent
 ./demo doctor
 ```
 
-Open <http://localhost:3000> only after startup prints:
+`build-runtime.sh` is the only step that uses the network for images. The GPU
+base image for tools is built once, separately, from
+`services/tools/base.Dockerfile` (the command is in that file's header).
+
+## Start
+
+```bash
+./demo start                    # same host boot
+./demo start --recreate-agent   # after a host reboot or an OpenShell re-prepare; requires ./demo stop first
+```
+
+`./demo` with no command also runs `start`. Before starting anything, startup
+checks the following. It never builds, pulls, or downloads.
+
+- the retention budget;
+- the model, scenario, and image receipts;
+- that the images match the current source tree;
+- that Compose defines exactly `web`, `tools`, and `model`, and that only `web`
+  publishes `127.0.0.1:3000`;
+- the OpenShell receipt.
+
+It then starts `tools` and `model`, starts or recreates the OpenShell agent,
+probes the remote endpoint when routing is on, and finally starts `web`.
+Startup ends with one of:
 
 ```text
 READY FOR DEMO: http://localhost:3000
+PREPARED, RESEARCH DISABLED: http://localhost:3000
 ```
 
-The start path uses `--no-build --pull never`. It validates the source-bound
-images, local models, event catalog, scenario, retention limits, and OpenShell
-deployment before reporting readiness.
+Most of a cold start is vLLM loading Lightning.
 
-After a full host reboot, explicit agent recreation refreshes the prepared
-OpenShell sandbox network namespace while preserving mounted investigation state
-and traces. For another start during the same host boot, normal `./demo` startup
-is sufficient.
-
-## Status
+## Status and doctor
 
 ```bash
-./demo status
-./demo doctor
+./demo status    # short public view: artifacts, containers, OpenShell, readiness
+./demo doctor    # full check; never prints credentials
 ```
 
-`status` is a concise public view. `doctor` checks the host, GB10 GPU, prepared
-artifacts, local generation, tools, OpenShell sandbox, and the configured
-Switchyard route without printing provider credentials. It also makes one
-bounded, authenticated, non-inference `/models` request from inside the sandbox
-to prove DNS, TLS, authentication, and endpoint admission.
+`doctor` checks the following:
 
-The page can appear before the full agent is ready after a machine restart.
-Trust the startup and doctor results, not the presence of an HTTP page alone.
+- the host is `aarch64` with a GB10 GPU;
+- containers can use the GPU;
+- the manifests, event catalog binding, and data qualification report are
+  present and valid;
+- the images and the OpenShell receipt are local and match;
+- the retention budgets are within limits.
 
-## Stop and transport
+If the application is running, it also checks the following, then prints a
+summary of the prepared data:
 
-Stop the application before shutting down the operating system:
+- the three Compose services;
+- the OpenShell sandbox;
+- tools health;
+- agent status;
+- when routing is on, a `/models` request to the remote endpoint from inside
+  the sandbox (no inference).
+
+## Stop
 
 ```bash
 ./demo stop
-sudo systemctl poweroff
 ```
 
-Wait until the workstation is fully off before disconnecting power. Do not use
-`docker compose down -v`; the prepared data, encrypted state, traces, and local
-images are part of the demo runtime.
+This stops the OpenShell agent and the `web`, `tools`, and `model` containers. It
+keeps models, data, state, traces, and networks. Do not run
+`docker compose down -v`. Before powering off the host, run `./demo stop`, then
+`sudo systemctl poweroff`.
 
-On the measured conference unit, a normal cold recovery takes approximately
-four to six minutes from power-on to a verified UI. Most of that time is local
-Nemotron model initialization. Reserve ten minutes at a venue for login,
-display, and network checks.
+## Remote routing off
 
-## Network expectations
+With `REMOTE_ROUTING_ENABLED=false`:
 
-Startup is offline with respect to artifacts: it does not build, pull, download,
-or acquire data. Live investigations still require the approved inference
-endpoint because Luna evaluates every Deep Agent reasoning call and Nemotron 3 Ultra may be
-selected. LangSmith is optional observability; the inference endpoint is not.
+- Startup prints `PREPARED, RESEARCH DISABLED`, and `status` exits non-zero
+  with the same message. `doctor` reports `WARN AGENT_STATUS` and passes.
+- The agent builds no graph. `/api/status` returns `ready: false` with a message
+  that research needs the remote routing endpoint. Investigation, follow-up, and
+  retry requests return 503.
+- The dashboard and curated events still load.
 
-Prefer a tested wired network or dedicated connection over captive conference
-Wi-Fi. If the endpoint is unavailable, stop new live questions and use a clearly
-labeled saved investigation rather than presenting it as a fresh run.
+This is deliberate. Switchyard's judge reviews every step, so the app cannot run
+a local-only investigation, and it refuses the request instead of silently
+skipping routing.
 
-## Common failures
+## Troubleshooting
 
-| Symptom | Meaning | Response |
+| Symptom | Likely cause | What to do |
 | --- | --- | --- |
-| No approved analysis model | The required route is unavailable | Restore the approved endpoint, then run `./demo doctor` |
-| Analysis route interrupted | A model connection ended before returning a response; eligible remote interruptions receive one observable retry to the same target | Check the local model and remote inference connections, then use the saved investigation's **Try again** action |
-| Local generation timeout | The local model did not complete its bounded canary | Stop new work and inspect the model service; do not loop restarts |
-| `REMOTE_PROVIDER` failed | The sandbox could not reach or authenticate to the approved inference endpoint | Run `./demo stop`, confirm host network readiness, then run `./demo start --recreate-agent` once; if it repeats, take the demo out of service |
-| Evidence tool unavailable | The typed evidence service is not healthy | Run `./demo doctor` and inspect the safe diagnostics |
-| Identity or receipt mismatch | Source, image, model, or data drift was detected | Do not bypass the check or substitute another model |
+| `explicit agent recreation requires a confirmed stopped runtime` | `--recreate-agent` while running | `./demo stop`, then start again |
+| `runtime images are stale for the current source tree` | Source changed since `build-runtime.sh` | Follow "After a source or env change" |
+| `OpenShell` verify or receipt failure | Env, policy, or image changed without re-prepare | Run `openshell_config.py` and `openshell_runtime.py prepare-receipt`, then `./demo start --recreate-agent` |
+| `remote inference admission failed` | Sandbox cannot reach or authenticate to the endpoint | `./demo stop`, check the host network and key, then `./demo start --recreate-agent`. If it repeats, take the demo out of service. |
+| `host port 3000 is occupied` | Another process holds the port | Stop that process; only Compose `web` may use it |
+| Status `unavailable: tools` / `model` | Tools startup probe failed or vLLM still loading | Wait for vLLM, then `./demo doctor`; inspect diagnostics |
+| Turn fails `judge_verdict_invalid` | Judge returned an unreadable verdict | Use **Retry**; the step is not silently kept |
+| Turn fails `identity_mismatch` | Provider answered as a different model | Do not substitute models; check the endpoint |
+| Turn fails `timeout`, `provider_error`, `context_length_exceeded` | Model call failed (remote connection errors are retried once) | Use **Retry**; check endpoint and `model` health |
+| Turn fails `uncited_answer` or `no_answer` | Answer ignored the tool evidence, or no structured answer | Use **Retry** or rephrase |
+| 409 `Another investigation is running` | One turn runs at a time | Wait, or cancel the running turn |
 
-Startup writes bounded, redacted diagnostics under
-`/srv/market-shock/reports/diagnostics`. Do not paste raw provider logs,
-rendered Compose configuration, request headers, or `.env` into an issue.
+When startup fails, it writes redacted diagnostics to
+`/srv/market-shock/reports/diagnostics` (`scripts/spark/collect-diagnostics.sh`).
+Do not share raw provider logs, rendered Compose config, request headers, or the
+env file.
+
+## Security reminders
+
+- Keep the application loopback-bound. The OpenShell gateway
+  (`127.0.0.1:17671`) is a workstation-local control plane with no multi-user
+  authentication. Never expose it.
+- Credentials belong only in the env file and in endpoint-bound OpenShell
+  providers. They must never go in images, the browser, reports, or logs.
+- There is no unsandboxed agent fallback. If OpenShell cannot run the agent,
+  the demo is down.

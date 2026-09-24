@@ -1,78 +1,84 @@
 # Demo walkthrough
 
-The story is a personal market research workstation that combines LangChain's
-agent framework with NVIDIA's local inference, GPU data processing, governed
-routing, and containment.
+A five-minute presenter script. The app has three views: **Dashboard**,
+**Research**, and **Built Together**. Before visitors arrive, confirm that
+`./demo start` printed `READY FOR DEMO` and that `./demo doctor` passes. If it
+printed `PREPARED, RESEARCH DISABLED`, you can show the Dashboard and Built
+Together views, but you cannot run live research.
 
-## 1. Begin on the dashboard
+## 1. Dashboard (about 1 minute)
 
-Open <http://localhost:3000>. Point out the watchlist, historical market context,
-and company evidence panel. The optional intraday widget makes the dashboard
-feel current, but it is display-only and never becomes agent evidence.
+Open <http://localhost:3000>.
 
-The important distinction is visible in the UI: the dashboard can show what is
-happening now, while Research uses the prepared, cutoff-qualified historical
-snapshot.
+- Walk through the watchlist of the supported companies and the selected
+  company's historical price chart against its benchmark.
+- Show "Comparable moves", which ranks sessions by benchmark-adjusted move, and
+  "Company documents", which lists only documents available by the cutoff.
+- Say it plainly: this is a prepared historical snapshot, not live market data.
+  The prices are a later reconstruction of daily bars.
 
-## 2. Set up a recent scenario
+## 2. Research (about 3 minutes)
 
-Open **Research** and select one of the first two recent events:
+Open **Research** and pick a curated event, for example the September 16, 2026
+Federal Reserve rate increase or NVIDIA's fiscal 2027 second-quarter repricing.
+**Set up scenario** fills in the companies, market session, and evidence cutoff.
+It does not start a run. Choose a suggested question or type one, then press
+**Investigate**.
 
-- the September 16, 2026 Federal Reserve rate increase and financial-sector
-  repricing; or
-- NVIDIA's August 26–27, 2026 fiscal 2027 second-quarter repricing.
+While it runs, point out:
 
-Selecting **Set up scenario** fills the supported companies, market window, and
-evidence cutoff. Choose one of the suggested questions or edit the question in
-the composer, then press **Investigate**. Scenario selection prepares the form;
-it does not silently start a model run.
+1. **The agent picked the skill.** The turn shows "Skill chosen by the agent".
+   The Deep Agent saw every skill's description and read the one that fits. The
+   application does not route questions to skills.
+2. **Every step is routed.** Local Nemotron 3.5 Lightning produced each step. A
+   remote judge decided whether Nemotron 3 Ultra should redo it. The timeline
+   shows each "Agent reasoning" and "Routing judge" call with its model and
+   latency.
+3. **The tools are GPU work.** Tool spans show the ticker, the outcome, and the
+   number of citations. Their receipts name the engine used: cuDF, cuVS,
+   cuGraph, cuML, or XGBoost.
+4. **The answer is grounded.** Citations are only sources the tools returned
+   for this turn, and none is dated after the cutoff. Uncertainty and tool
+   limitations are listed, not hidden.
 
-## 3. Follow the investigation
+Then ask a follow-up in **Continue this investigation**. For example, "How
+unusual was that move compared with history?" or "Which related stocks moved
+with it?". The scope carries forward, and an investigation holds up to four
+questions. To show the guardrails, ask something out of scope, such as a trade
+recommendation. The research guide skill explains what the agent can answer
+instead.
 
-As the answer develops, open **Research details**. The timeline shows policy,
-model, and tool spans on one Gantt view. Hover a span to see its timing and role.
+If a turn fails, show the error message and use **Retry**. Do not re-run it
+until it happens to succeed and present that as the first result.
 
-Call out three behaviors:
+## 3. Built Together (about 1 minute)
 
-1. The Deep Agent reads a skill and chooses its own approved evidence tools.
-2. Switchyard evaluates each logical call and keeps work local when Lightning is
-   sufficient, escalating to Ultra only when the configured route selects it.
-3. The final answer carries sources and uncertainty instead of hiding evidence
-   gaps.
+Open **Built Together** and walk through the four stages:
 
-Use a follow-up question to show that LangGraph-backed state preserves the event
-scope and earlier turn without turning the application into a general-purpose
-assistant.
+1. **A Deep Agent chooses how to research.** LangChain Deep Agents, skills, and
+   a typed answer.
+2. **Every step is routed on purpose.** NeMo Switchyard, the local Lightning
+   model, the remote judge, and Nemotron 3 Ultra.
+3. **GPU tools measure the evidence.** MCP tools on RAPIDS and XGBoost, bounded
+   by the cutoff.
+4. **The agent runs sandboxed and traced.** OpenShell containment, NeMo Relay
+   traces, and optional LangSmith export.
 
-## 4. Explain what is built together
+The **GitHub** link in the header opens this repository. Useful files to show
+are `services/agent/src/market_agent/agent.py` (the Deep Agent),
+`services/agent/skills/` (the skills), `services/agent/src/market_agent/routing.py`
+(Switchyard), `services/tools/src/market_tools/` (the tools), and
+`scripts/spark/openshell/policy.yaml` (the sandbox policy).
 
-Open **Built Together**. Walk left to right through the four stages:
+## What to say and not say
 
-1. LangChain Deep Agents and LangGraph organize the investigation.
-2. DGX Spark and Nemotron 3.5 Lightning produce the efficient local result;
-   Switchyard governs escalation to Nemotron 3 Ultra.
-3. RAPIDS, CUDA-X, Nemotron 3 Embed, and OpenShell provide evidence work and a
-   constrained runtime.
-4. NeMo Relay and LangSmith make the run observable so the team can improve the
-   next version.
-
-The central partnership point is simple: faster local work improves the user
-experience, and observable runs shorten the team's iteration cycle.
-
-## 5. Open the source
-
-The **GitHub** link in the top-right header opens this repository in a new tab.
-Use it to show the Deep Agent initialization, versioned skills, Switchyard
-middleware, OpenShell policy, typed MCP tools, and the React experience without
-exposing credentials or the private qualification corpus.
-
-## Presenter boundaries
-
-- Describe answers as historical research, not investment advice.
-- Do not claim that reconstructed data is an archive captured on the original
-  date.
-- Do not describe the live widget as agent evidence.
-- Do not claim a fully offline investigation; the approved routing endpoint is
-  required.
-- If a live run fails, use the human-readable recovery guidance and preserve the
-  trace rather than swapping models or inventing an answer.
+- Research needs the remote endpoint, because the judge reviews every step.
+  Startup is offline; investigations are not. Do not call the demo "fully
+  local".
+- Remote calls send the conversation and tool evidence to the configured
+  endpoint.
+- The data is small: five target companies plus one peer, about 10.6k daily
+  bars, and 494 documents, mostly SEC filing metadata.
+- A cutoff controls which evidence the agent can use. It does not turn
+  reconstructed data into a historical archive.
+- Answers are historical research, not investment advice.

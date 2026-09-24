@@ -1,43 +1,89 @@
 import type { Artifact } from "../api/types";
+import { formatNumber, formatPercent } from "../format";
 import "./artifact.css";
 
-type Point = { evidence_id?: string; coordinates?: number[] };
-type PlottedPoint = { evidenceId: string; x: number; y: number };
+type Row = Record<string, unknown>;
+const rows = (value: unknown): Row[] => Array.isArray(value) ? value.filter((item): item is Row => item !== null && typeof item === "object") : [];
+const num = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+const text = (value: unknown) => value === null || value === undefined ? "n/a" : String(value);
 
-function plottedPoints(data: Record<string, unknown>): PlottedPoint[] {
-  const points = Array.isArray(data.points) ? data.points as Point[] : [];
-  return points.flatMap((point, index) => {
-    const coordinates = point.coordinates;
-    if (!Array.isArray(coordinates) || coordinates.length < 2 || !coordinates.slice(0, 2).every(Number.isFinite)) return [];
-    return [{ evidenceId: point.evidence_id ?? `Point ${index + 1}`, x: coordinates[0], y: coordinates[1] }];
-  });
+function AnalogueTable({ artifact }: { artifact: Artifact }) {
+  const analogues = rows(artifact.data.rows);
+  return (
+    <>
+      <table className="artifact-table">
+        <caption>Measured tool output · sessions most similar to {text(artifact.data.target_session)}</caption>
+        <thead><tr><th scope="col">Ticker</th><th scope="col">Session</th><th scope="col">Return</th><th scope="col">vs benchmark</th><th scope="col">Volume ratio</th><th scope="col">Distance</th></tr></thead>
+        <tbody>
+          {analogues.map((row, index) => (
+            <tr key={`${text(row.ticker)}-${text(row.session_date)}-${index}`}>
+              <th scope="row">{text(row.ticker)}</th>
+              <td>{text(row.session_date)}</td>
+              <td>{formatPercent(num(row.return_1d_pct))}</td>
+              <td>{formatNumber(num(row.benchmark_relative_return_pp))} pp</td>
+              <td>{formatNumber(num(row.volume_ratio))}×</td>
+              <td>{formatNumber(num(row.distance), 3)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {typeof artifact.data.method === "string" && <p className="artifact-note">{artifact.data.method}</p>}
+    </>
+  );
 }
 
-function TopicMap({ artifact, points }: { artifact: Artifact; points: PlottedPoint[] }) {
-  const xs = points.map((point) => point.x), ys = points.map((point) => point.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const scale = (value: number, minimum: number, maximum: number) => maximum === minimum ? 50 : 8 + 84 * (value - minimum) / (maximum - minimum);
+function ComovementTable({ artifact }: { artifact: Artifact }) {
+  const nodes = rows(artifact.data.nodes);
   return (
-    <svg className="topic-map" viewBox="0 0 100 100" role="img" aria-label={`${artifact.title}, ${points.length} evidence points`}>
+    <table className="artifact-table">
+      <caption>Measured tool output · instruments linked to {text(artifact.data.target)} before {text(artifact.data.session_date)}</caption>
+      <thead><tr><th scope="col">Instrument</th><th scope="col">Hops</th><th scope="col">Correlation</th><th scope="col">Session return</th></tr></thead>
+      <tbody>
+        {nodes.map((node) => (
+          <tr key={text(node.ticker)}>
+            <th scope="row">{text(node.ticker)}</th>
+            <td>{text(node.hops)}</td>
+            <td>{formatNumber(num(node.correlation_with_target))}</td>
+            <td>{formatPercent(num(node.session_return_pct))}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function TopicMap({ artifact }: { artifact: Artifact }) {
+  const points = rows(artifact.data.points).flatMap((point, index) => {
+    const coordinates = Array.isArray(point.coordinates) ? point.coordinates.map(num) : [];
+    const [x, y] = coordinates;
+    return x === null || y === null || x === undefined || y === undefined ? [] : [{ key: `${text(point.evidence_id)}-${index}`, title: text(point.title), x, y }];
+  });
+  if (!points.length) return null;
+  const xs = points.map((point) => point.x), ys = points.map((point) => point.y);
+  const scale = (value: number, values: number[]) => {
+    const minimum = Math.min(...values), maximum = Math.max(...values);
+    return maximum === minimum ? 50 : 8 + 84 * (value - minimum) / (maximum - minimum);
+  };
+  return (
+    <svg className="topic-map" viewBox="0 0 100 100" role="img" aria-label={`${artifact.title}: ${points.length} documents`}>
       {points.map((point) => (
-        <g key={point.evidenceId}>
-          <circle cx={scale(point.x, minX, maxX)} cy={100 - scale(point.y, minY, maxY)} r="2.8" />
-          <title>{point.evidenceId}</title>
-        </g>
+        <circle key={point.key} cx={scale(point.x, xs)} cy={100 - scale(point.y, ys)} r="2.8"><title>{point.title}</title></circle>
       ))}
     </svg>
   );
 }
 
 export function ArtifactView({ artifact }: { artifact: Artifact }) {
-  const points = artifact.kind === "topic_projection" ? plottedPoints(artifact.data) : [];
   return (
-    <div className="artifact-view" data-artifact-id={artifact.artifact_id} data-artifact-kind={artifact.kind}>
-      {points.length > 0 && <TopicMap artifact={artifact} points={points} />}
+    <figure className="artifact-view" data-artifact-kind={artifact.kind}>
+      <figcaption>{artifact.title}</figcaption>
+      {artifact.kind === "analogue_table" && <AnalogueTable artifact={artifact} />}
+      {artifact.kind === "comovement_graph" && <ComovementTable artifact={artifact} />}
+      {artifact.kind === "topic_projection" && <TopicMap artifact={artifact} />}
       <details className="artifact-data">
         <summary>Inspect exact artifact data</summary>
-        <pre data-artifact-json aria-label={`${artifact.title} exact artifact data`}>{JSON.stringify(artifact.data, null, 2)}</pre>
+        <pre>{JSON.stringify(artifact.data, null, 2)}</pre>
       </details>
-    </div>
+    </figure>
   );
 }

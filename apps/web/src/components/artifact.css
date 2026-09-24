@@ -14,3 +14,9 @@
   stroke: #ffffff;
   stroke-width: 1;
 }
+
+.artifact-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.artifact-table caption { padding: 8px 12px; color: var(--subtle); font-size: 11px; text-align: left; }
+.artifact-table th, .artifact-table td { border-top: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+.artifact-table thead th { color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.artifact-note { margin: 0; border-top: 1px solid var(--border); padding: 9px 12px; color: var(--secondary); font-size: 11px; line-height: 1.5; }
