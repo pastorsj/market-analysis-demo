@@ -243,9 +243,9 @@ events:
   - event_id: nvda-earnings-2024-08-28
     category_id: earnings-guidance
     title: NVIDIA fiscal 2025 second-quarter results
-    summary: NVIDIA reported second-quarter fiscal 2025 results and an outlook on August 28, 2024, defining an earnings-related repricing window for NVIDIA and semiconductor peers.
+    summary: NVIDIA reported second-quarter fiscal 2025 results and an outlook after the close on August 28, 2024; the market reaction came in the August 29 session.
     sort_order: 6
-    event_session: "2024-08-28"
+    event_session: "2024-08-29"
     source_dates: ["2024-08-28"]
     primary_ticker: NVDA
     analysis_tickers: [NVDA, AMD, AVGO]
@@ -285,9 +285,9 @@ events:
   - event_id: amd-earnings-2025-02-04
     category_id: earnings-guidance
     title: AMD 2024 fourth-quarter results
-    summary: AMD reported fourth-quarter and full-year 2024 results and a first-quarter outlook on February 4, 2025, defining an earnings-related semiconductor research window.
+    summary: AMD reported fourth-quarter and full-year 2024 results and a first-quarter outlook after the close on February 4, 2025; the market reaction came in the February 5 session.
     sort_order: 7
-    event_session: "2025-02-04"
+    event_session: "2025-02-05"
     source_dates: ["2025-02-04"]
     primary_ticker: AMD
     analysis_tickers: [AMD, NVDA, AVGO]
