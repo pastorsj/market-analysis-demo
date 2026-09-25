@@ -133,6 +133,7 @@ skipping routing.
 | Turn fails `judge_verdict_invalid` | Judge returned an unreadable verdict | Use **Retry**; the step is not silently kept |
 | Turn fails `identity_mismatch` | Provider answered as a different model | Do not substitute models; check the endpoint |
 | Turn fails `timeout`, `provider_error`, `context_length_exceeded` | Model call failed (remote connection errors are retried once) | Use **Retry**; check endpoint and `model` health |
+| Local model stalls: `model` logs show ~1 token/s, `Running: 2 reqs`, growing `Waiting`/`Deferred`, GPU idle | A large `maxLength` in a tool or `Answer` schema (compiled to a `{1,N}` repetition) makes xgrammar decoding CPU-bound under `tool_choice="required"`; abandoned requests keep running because the OpenShell proxy does not pass client disconnects to vLLM | `docker restart market-shock-model-1`; keep large length bounds out of tool schemas (validate after generation) |
 | Turn fails `uncited_answer` or `no_answer` | Answer ignored the tool evidence, or no structured answer | Use **Retry** or rephrase |
 | 409 `Another investigation is running` | One turn runs at a time | Wait, or cancel the running turn |
 
