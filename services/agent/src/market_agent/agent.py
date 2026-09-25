@@ -30,7 +30,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import HumanMessage, RemoveMessage
 from nemo_relay.integrations.deepagents import NemoRelayDeepAgentsCallbackHandler, add_nemo_relay_integration
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .catalog import Coverage
 from .config import LOCAL_MODEL, Settings
@@ -55,7 +55,10 @@ register_harness_profile(
 class Answer(BaseModel):
     """The final answer to the user's current question."""
 
-    answer: str = Field(min_length=1, max_length=6000, description="The answer in plain Markdown.")
+    # No max_length here: vLLM's xgrammar compiles a JSON-schema maxLength into a
+    # {1,6000} repetition that slows tool_choice="required" decoding ~7x and can
+    # starve the local model. The bound is enforced after generation instead.
+    answer: str = Field(min_length=1, description="The answer in plain Markdown.")
     citation_ids: list[str] = Field(
         default_factory=list,
         max_length=20,
@@ -69,6 +72,13 @@ class Answer(BaseModel):
         max_length=3,
         description="Only when the question could not be answered: concrete questions that can be.",
     )
+
+    @field_validator("answer")
+    @classmethod
+    def _bounded(cls, value: str) -> str:
+        if len(value) > 6000:
+            raise ValueError("answer must be at most 6000 characters")
+        return value
 
 
 class AgentError(RuntimeError):
