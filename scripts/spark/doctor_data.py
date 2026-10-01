@@ -379,7 +379,7 @@ def main(argv: list[str]) -> int:
                 if isinstance(tool, dict)
             ]
             gpu_receipts = sum(
-                receipt.get("gpu_executed") is True and receipt.get("fallback_used") is False
+                receipt.get("gpu_executed") is True and receipt.get("engine") == "cudf"
                 for receipt in receipts
             )
             emit("runtime_gpu", f"strict_receipts={gpu_receipts}/{len(receipts)}")

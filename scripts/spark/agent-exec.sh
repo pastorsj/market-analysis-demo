@@ -4,5 +4,6 @@ set -Eeuo pipefail
 export XDG_CONFIG_HOME=/srv/market-shock/openshell/config
 export XDG_DATA_HOME=/srv/market-shock/openshell/data
 export XDG_STATE_HOME=/srv/market-shock/openshell/state
-exec /srv/market-shock/openshell/0.0.116/openshell -g market-shock \
-  sandbox exec -n market-agent -- "$@"
+export NO_COLOR=1
+exec /srv/market-shock/openshell/0.1.2/openshell -g market-shock \
+  sandbox exec -n market-agent --no-tty -- "$@"

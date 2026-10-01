@@ -17,8 +17,10 @@ JUDGE_MODEL = "openai/openai/gpt-5.6-luna"
 CAPABLE_MODEL = "nvidia/nvidia/nemotron-3-ultra"
 
 MAX_TURNS = 4
-TOOLS_URL = "http://tools:8000/mcp"
-MODEL_URL = "http://model:8001/v1"
+# OpenShell's Docker driver pins this reserved alias to the gateway host, where
+# Compose publishes tools and model on loopback only.
+TOOLS_URL = "http://host.openshell.internal:8000/mcp"
+MODEL_URL = "http://host.openshell.internal:8001/v1"
 
 # Display names and aliases used to recognize companies in free-text questions.
 # Tickers themselves come from the prepared scenario at runtime.

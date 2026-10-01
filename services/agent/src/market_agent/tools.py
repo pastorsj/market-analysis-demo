@@ -29,8 +29,14 @@ MARKET_TOOLS = {
 }
 
 
+def tools_client(read_timeout_seconds: float) -> Client:
+    # The initialize handshake negotiates an MCP revision that OpenShell's MCP
+    # inspection accepts; "auto" would probe the newer server/discover method.
+    return Client(TOOLS_URL, read_timeout_seconds=read_timeout_seconds, mode="legacy")
+
+
 async def mcp_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-    async with Client(TOOLS_URL, read_timeout_seconds=90) as client:
+    async with tools_client(90) as client:
         result = await client.call_tool(name, arguments)
     if result.is_error or not isinstance(result.structured_content, dict):
         raise RuntimeError(f"{name} failed in the tools service")

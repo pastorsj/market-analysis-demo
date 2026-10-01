@@ -171,3 +171,53 @@ async def test_turns_interrupted_by_a_restart_become_failed(client):
 )
 async def test_dashboard_rejects_bad_input_without_calling_tools(client, query):
     assert (await client.get(f"/api/dashboard?{query}")).status_code == 422
+
+
+class FakeToolsClient:
+    """Stands in for the MCP client the sandbox policy admits (initialize, ping, ...)."""
+
+    def __init__(self, fail=False):
+        self.fail, self.pings = fail, 0
+
+    def __call__(self, read_timeout_seconds):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def send_ping(self):
+        self.pings += 1
+        if self.fail:
+            raise RuntimeError("POST /mcp not permitted by policy")
+
+
+class OfflineModel:
+    def __init__(self, timeout):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url):
+        raise httpx.ConnectError("offline")
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_tools_readiness_is_an_mcp_ping(monkeypatch, events, fail):
+    from types import SimpleNamespace
+
+    tools = FakeToolsClient(fail=fail)
+    monkeypatch.setattr(app_module, "tools_client", tools)
+    monkeypatch.setattr(
+        app_module, "httpx", SimpleNamespace(AsyncClient=OfflineModel, HTTPError=httpx.HTTPError)
+    )
+    state = SimpleNamespace(health={"checked": 0.0}, events=events)
+    request = SimpleNamespace(app=SimpleNamespace(state=state))
+    assert await app_module.dependencies(request) == {"tools": not fail, "model": False, "events": True}
+    assert tools.pings == 1

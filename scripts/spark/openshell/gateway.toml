@@ -1,32 +1,31 @@
 [openshell]
-version = 1
+version = 2
 
 [openshell.gateway]
 name = "market-shock"
+# Loopback only. TLS, client-certificate (mTLS) user authentication, and
+# gateway-minted sandbox JWTs come from the package-managed local TLS
+# directory (OPENSHELL_LOCAL_TLS_DIR), as in the upstream systemd unit.
 bind_address = "127.0.0.1:17671"
 log_level = "info"
-compute_drivers = ["docker"]
-disable_tls = true
+compute_driver = "docker"
 policy_validation_failure_mode = "fail_closed"
-
-[openshell.gateway.gateway_jwt]
-signing_key_path = "/srv/market-shock/openshell/keys/signing.pem"
-public_key_path = "/srv/market-shock/openshell/keys/public.pem"
-kid_path = "/srv/market-shock/openshell/keys/kid"
-gateway_id = "market-shock"
-ttl_secs = 0
-
-[openshell.gateway.auth]
-# Workstation-local control API only; bridge callback listener is sandbox-only.
-allow_unauthenticated_users = true
+# The browser reaches the agent through web's /api proxy, never a service URL.
+enable_loopback_service_http = false
 
 [openshell.drivers.docker]
-network_name = "market-shock_openshell"
-sandbox_namespace = "market-shock"
-image_pull_policy = "Never"
-supervisor_bin = "/srv/market-shock/openshell/0.0.116/openshell-sandbox"
-grpc_endpoint = "http://host.openshell.internal:17671"
-# Only selected app data/state paths are mounted by the operator. No Docker
-# socket, home directory, repository or OpenShell control state enters the agent.
-enable_bind_mounts = true
+socket_path = "/var/run/docker.sock"
+sandbox_label = "market-shock"
+image_pull_policy = "never"
+sandbox_runtime_image = "ghcr.io/nvidia/openshell/sandbox:0.1.2"
+supervisor_image = "ghcr.io/nvidia/openshell/supervisor:0.1.2"
 sandbox_pids_limit = 512
+# The operator mounts only selected app data/state paths (see
+# openshell_runtime.py). No Docker socket, home directory, repository, or
+# OpenShell control state enters the agent. Raw host bind mounts have no label
+# resolver, so OpenShell requires admission to be disabled for them.
+allow_driver_config = true
+enable_bind_mounts = true
+
+[openshell.drivers.docker.resource_admission]
+enabled = false

@@ -3,7 +3,8 @@
 The caller persists the receipt at
 /srv/market-shock/openshell/prepared/runtime.json. This module reads artifacts,
 but never launches commands, reads version output, or stores artifact contents.
-The caller must qualify the executable version before creating its receipt.
+The caller must qualify the executable version and resolve the pinned agent,
+supervisor, and sandbox-runtime image IDs before creating its receipt.
 """
 
 from __future__ import annotations
@@ -17,21 +18,13 @@ from typing import Any
 from collections.abc import Mapping
 
 
-VERSION = "0.0.116"
-SCHEMA = "market-shock-openshell-runtime-v1"
-FILE_ROLES = frozenset(
-    {
-        "binary",
-        "gateway",
-        "supervisor",
-        "gateway_config",
-        "policy",
-        "env",
-        "provider_list",
-        "base_policy",
-    }
-)
-FIELDS = frozenset({"schema_version", "version", "image_id", "source_build_input", "files"})
+VERSION = "0.1.2"
+SCHEMA = "market-shock-openshell-runtime-v2"
+FILE_ROLES = frozenset({"binary", "gateway", "gateway_config", "policy", "env", "provider_list"})
+# The Docker driver copies its supervisor and sandbox runtime from these images.
+RUNTIME_IMAGE_ROLES = frozenset({"supervisor", "sandbox"})
+FIELDS = frozenset({"schema_version", "version", "image_id", "source_build_input", "runtime_images", "files"})
+IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}")
 HEX = re.compile(r"[a-f0-9]{64}")
 
 
@@ -88,13 +81,19 @@ def _digest(path: Path) -> str:
             os.close(descriptor)
 
 
-def _pins(version: str, image_id: str, source_build_input: str) -> None:
+def _pins(version: str, image_id: str, source_build_input: str, runtime_images: Mapping[str, str]) -> None:
     if version != VERSION:
         raise ReceiptError("version_pin")
-    if not isinstance(image_id, str) or re.fullmatch(r"sha256:[a-f0-9]{64}", image_id) is None:
+    if not isinstance(image_id, str) or IMAGE_ID.fullmatch(image_id) is None:
         raise ReceiptError("image_pin")
     if not isinstance(source_build_input, str) or HEX.fullmatch(source_build_input) is None:
         raise ReceiptError("source_pin")
+    if (
+        not isinstance(runtime_images, Mapping)
+        or set(runtime_images) != RUNTIME_IMAGE_ROLES
+        or not all(isinstance(value, str) and IMAGE_ID.fullmatch(value) for value in runtime_images.values())
+    ):
+        raise ReceiptError("runtime_image_pin")
 
 
 def create_receipt(
@@ -102,10 +101,11 @@ def create_receipt(
     *,
     image_id: str,
     source_build_input: str,
+    runtime_images: Mapping[str, str],
     version: str = VERSION,
 ) -> dict[str, Any]:
     """Hash exactly the required prepared artifacts after version qualification."""
-    _pins(version, image_id, source_build_input)
+    _pins(version, image_id, source_build_input, runtime_images)
     if not isinstance(files, Mapping) or set(files) != FILE_ROLES:
         raise ReceiptError("file_roles")
     rows = {}
@@ -121,6 +121,7 @@ def create_receipt(
         "version": version,
         "image_id": image_id,
         "source_build_input": source_build_input,
+        "runtime_images": dict(sorted(runtime_images.items())),
         "files": rows,
     }
 
@@ -130,10 +131,11 @@ def validate_receipt(
     *,
     image_id: str,
     source_build_input: str,
+    runtime_images: Mapping[str, str],
     version: str = VERSION,
 ) -> None:
     """Require exact pins and recompute every artifact digest; fail closed."""
-    _pins(version, image_id, source_build_input)
+    _pins(version, image_id, source_build_input, runtime_images)
     if not isinstance(receipt, Mapping) or set(receipt) != FIELDS:
         raise ReceiptError("receipt_shape")
     if (
@@ -141,7 +143,8 @@ def validate_receipt(
         receipt["version"],
         receipt["image_id"],
         receipt["source_build_input"],
-    ) != (SCHEMA, version, image_id, source_build_input):
+        receipt["runtime_images"],
+    ) != (SCHEMA, version, image_id, source_build_input, dict(sorted(runtime_images.items()))):
         raise ReceiptError("receipt_identity")
     rows = receipt["files"]
     if not isinstance(rows, Mapping) or set(rows) != FILE_ROLES:
@@ -160,6 +163,12 @@ def validate_receipt(
         if str(path) != row["path"]:
             raise ReceiptError("artifact_path")
         files[role] = path
-    current = create_receipt(files, image_id=image_id, source_build_input=source_build_input, version=version)
+    current = create_receipt(
+        files,
+        image_id=image_id,
+        source_build_input=source_build_input,
+        runtime_images=runtime_images,
+        version=version,
+    )
     if current != receipt:
         raise ReceiptError("artifact_digest_drift")

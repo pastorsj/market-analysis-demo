@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Verify and atomically publish the scenario-bound shock-event catalog."""
+"""Build, verify, and atomically publish the scenario-bound shock-event catalog.
+
+`build` needs the data-prep dependencies (run it in market-shock/market-prep);
+`verify`, `publish`, and `restore` use only the standard library.
+"""
 
 from __future__ import annotations
 
@@ -381,6 +385,10 @@ def main() -> int:
         command.add_argument("--event-root" if name == "verify" else "--artifact", type=Path, required=True)
         if name == "publish":
             command.add_argument("--events-root", type=Path, required=True)
+    command = subparsers.add_parser("build")
+    command.add_argument("--repository-root", type=Path, required=True)
+    command.add_argument("--scenario-root", type=Path, required=True)
+    command.add_argument("--events-root", type=Path, required=True)
     command = subparsers.add_parser("restore")
     command.add_argument("--events-root", type=Path, required=True)
     command.add_argument("--prior-target", required=True)
@@ -391,6 +399,17 @@ def main() -> int:
             restore(args.events_root, args.prior_target, args.expected_current)
             return 0
         catalog, schema = _paths(args)
+        if args.command == "build":
+            from scripts.data.event_contract import EventContractError, build_event_artifact
+
+            try:
+                artifact = build_event_artifact(
+                    catalog, args.scenario_root, args.events_root / "artifacts", schema
+                )
+            except EventContractError as exc:
+                raise EventPublicationError(str(exc)) from exc
+            print(json.dumps({"artifact": str(artifact)}, sort_keys=True))
+            return 0
         if args.command == "verify":
             receipt = verify_binding(args.scenario_root, args.event_root, catalog, schema)
         else:

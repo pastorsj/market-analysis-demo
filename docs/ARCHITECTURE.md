@@ -19,9 +19,15 @@ flowchart LR
 | Role | Code | Runs under |
 | --- | --- | --- |
 | `web:3000` | `apps/web/` (nginx config: `apps/web/nginx.conf`) | Compose; published only on `127.0.0.1:3000` |
-| `agent:2024` | `services/agent/src/market_agent/` | OpenShell 0.0.116 sandbox |
-| `tools:8000` | `services/tools/src/market_tools/` | Compose, private network |
-| `model:8001` | vLLM image and command in `compose.yaml` | Compose, private network |
+| `agent:2024` | `services/agent/src/market_agent/` | OpenShell 0.1.2 sandbox (Docker driver) |
+| `tools:8000` | `services/tools/src/market_tools/` | Compose; published only on `127.0.0.1:8000` |
+| `model:8001` | vLLM image and command in `compose.yaml` | Compose; published only on `127.0.0.1:8001` |
+
+The agent reaches `tools` and `model` at `host.openshell.internal`, the alias
+that OpenShell's Docker driver pins to the gateway host. The agent's workload
+container has no network of its own (`network=none`). Every connection goes
+through OpenShell's host-networked supervisor, which enforces the sandbox
+policy before opening it.
 
 ## Request flow
 
@@ -49,7 +55,7 @@ flowchart LR
    - Limits: 14 model calls and 24 tool calls per run, with a recursion limit of 80.
 5. **Routing each step.** `routing.switchyard_middleware` wraps every model
    step in Switchyard's escalation classifier:
-   - Local Lightning (`model:8001`) produces the step.
+   - Local Lightning (`host.openshell.internal:8001`) produces the step.
    - The remote judge `openai/openai/gpt-5.6-luna` reads the step
      (`prompts/escalation.md`) and decides whether to escalate.
    - If it escalates, remote `nvidia/nvidia/nemotron-3-ultra` redoes the step.
@@ -63,7 +69,9 @@ flowchart LR
    - injects the cutoff (market tools use the session close, and document tools
      use the evidence cutoff);
    - dedupes identical calls and caps a turn at 16 distinct calls;
-   - calls MCP at `http://tools:8000/mcp`;
+   - calls MCP at `http://host.openshell.internal:8000/mcp` with the
+     `initialize` handshake (`mode="legacy"`), which negotiates an MCP revision
+     that OpenShell inspects;
    - rejects results containing citations dated after the cutoff;
    - keeps the full result in the turn's ledger and gives the model a compact view.
 7. **Answer.** The agent finishes with `ToolStrategy(Answer)`, a structured
@@ -102,6 +110,8 @@ removes the failed turn's messages from the checkpoint and runs the turn again.
 `services/tools/src/market_tools/server.py` is a Streamable HTTP MCP server with
 seven read-only tools. At startup it loads the prepared scenario and runs every
 tool once. `/health` is not ready until each tool has produced a GPU result.
+Compose and `doctor` use `/health`. The agent checks tools with an MCP `ping`,
+because its policy admits only MCP traffic on that port.
 
 | Tool | GPU work |
 | --- | --- |
@@ -131,20 +141,35 @@ defined in `services/tools/base.Dockerfile`.
 ## Trust boundaries
 
 - **Browser.** Talks only to `web` on `127.0.0.1:3000` (`/api` is proxied).
-  `scripts/spark/process_contract.py` checks that no other service publishes a port.
+  `scripts/spark/process_contract.py` checks that only `web` (3000), `tools`
+  (8000), and `model` (8001) publish ports, all on `127.0.0.1`.
 - **Agent sandbox.** OpenShell owns the agent. `scripts/spark/openshell/policy.yaml`
   makes the application, scenario, and event catalog read-only and allows writes
-  only to `state`, `traces`, and `/tmp`. Network egress is limited to `tools:8000`,
-  `model:8001`, and the endpoints of the configured providers.
-  `scripts/spark/openshell_runtime.py` never starts an unsandboxed agent.
+  only to `state`, `traces`, and `/tmp`. Network egress is limited to
+  `host.openshell.internal:8000` and `host.openshell.internal:8001`, plus the
+  endpoints of attached providers:
+  - Tools traffic is MCP-inspected. Only `initialize`, `ping`,
+    `tools/list`, `resources/read`, and `tools/call` for the seven tools are
+    allowed.
+  - Model traffic is limited to `POST /v1/chat/completions` and
+    `GET /v1/models`.
+
+  The workload runs as UID 1000 with no capabilities, no network namespace, and
+  only the four prepared bind mounts. `scripts/spark/openshell_runtime.py`
+  checks all of this on every start and never starts an unsandboxed agent.
 - **Credentials.** `scripts/spark/openshell_config.py` reads the env file and
   stores `NVIDIA_INFERENCE_API_KEY` and `LANGSMITH_API_KEY` only in
-  endpoint-bound OpenShell providers. They never go to web, tools, model, the
-  images, or the browser.
+  OpenShell providers. Each provider's profile binds its credential to a single
+  endpoint. The sandbox sees only an `openshell:resolve:env:` placeholder,
+  which the supervisor replaces only on requests to that endpoint. The keys
+  never go to web, tools, model, the images, or the browser.
 - **Tools and model.** Neither holds credentials or calls remote inference.
-- **Gateway.** The OpenShell gateway binds to `127.0.0.1:17671`
-  (`scripts/spark/openshell/gateway.toml`). It is a workstation-local control
-  plane, not an authenticated multi-user service. Do not expose it.
+- **Gateway.** The application's own OpenShell gateway runs as the systemd user
+  unit `market-shock-openshell.service` and binds to `127.0.0.1:17671`
+  (`scripts/spark/openshell/gateway.toml`). It serves TLS with client-certificate
+  (mTLS) authentication. Its CA, certificates, and JWT signing keys come from
+  `openshell-gateway generate-certs` under `/srv/market-shock/openshell/tls`.
+  It is a single-user, workstation-local control plane. Do not expose it.
 - **Evidence.** The model is told that tool output is data, not instructions.
   The wrappers set the cutoff and scope, so the model cannot widen either.
 
