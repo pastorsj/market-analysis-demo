@@ -113,6 +113,17 @@ class Scenario:
         self.semantic_index = read_json(root / "indexes/cuvs-index.json")
         self.embedding_ids: list[str] = read_json(root / "indexes/embedding_ids.json")
 
+    def identity(self) -> dict[str, str]:
+        """Checksum-bound snapshot identities, as verified when the scenario loaded."""
+        return {
+            "scenario_id": self.scenario_id,
+            "scenario_manifest_sha256": self.manifest_sha256,
+            "market_manifest_sha256": self.manifest["market"]["manifest_sha256"],
+            "document_manifest_sha256": self.manifest["documents"]["manifest_sha256"],
+            "market_readiness_sha256": self.manifest["readiness"]["market"]["sha256"],
+            "document_readiness_sha256": self.manifest["readiness"]["documents"]["sha256"],
+        }
+
     def completed_session(self, as_of: datetime) -> Session | None:
         """Return the last session whose close is at or before the cutoff."""
         cutoff = as_of.astimezone(UTC)

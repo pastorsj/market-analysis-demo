@@ -54,19 +54,9 @@ TOOL_RESULT_KEYS = {
     "artifacts",
     "warnings",
 }
-RECEIPT_KEYS = {
-    "engine",
-    "device",
-    "gpu_executed",
-    "fallback_used",
-    "duration_ms",
-    "artifact_manifest_sha256",
-    "scenario_id",
-    "market_manifest_sha256",
-    "document_manifest_sha256",
-    "market_readiness_sha256",
-    "document_readiness_sha256",
-}
+# Mirrors market_tools.models.ExecutionReceipt. Snapshot digests are bound once,
+# through the tools /health identity, rather than on every call.
+RECEIPT_KEYS = {"engine", "device", "gpu_executed", "duration_ms", "scenario_id"}
 COVERAGE_KEYS = {"dimension", "key", "status", "required", "observed_count", "expected_count"}
 LIMITATION_KEYS = {"code", "message", "affected"}
 COVERAGE_DIMENSIONS = {
@@ -74,7 +64,7 @@ COVERAGE_DIMENSIONS = {
     "market_window",
     "documents",
     "analogue_candidates",
-    "graph_paths",
+    "comovement",
     "risk_model",
     "projection_documents",
 }
@@ -605,22 +595,13 @@ def _tool_observation(
         requested_at = datetime.fromisoformat(str(arguments["as_of"]).replace("Z", "+00:00"))
     except (KeyError, TypeError, ValueError) as exc:
         raise RuntimeError(f"tool_contract_time:{tool}") from exc
-    binding = {
-        "artifact_manifest_sha256": inputs["scenario_manifest_sha256"],
-        "scenario_id": inputs["scenario_id"],
-        "market_manifest_sha256": inputs["market_manifest_sha256"],
-        "document_manifest_sha256": inputs["document_manifest_sha256"],
-        "market_readiness_sha256": inputs["market_readiness_sha256"],
-        "document_readiness_sha256": inputs["document_readiness_sha256"],
-    }
     if (
         returned_at.tzinfo is None
         or requested_at.tzinfo is None
         or returned_at != requested_at
-        or any(receipt.get(key) != expected for key, expected in binding.items())
+        or receipt.get("scenario_id") != inputs["scenario_id"]
         or receipt.get("engine") != "cudf"
         or receipt.get("gpu_executed") is not True
-        or receipt.get("fallback_used") is not False
         or not isinstance(receipt.get("device"), str)
         or not receipt["device"].strip()
         or isinstance(receipt.get("duration_ms"), bool)
@@ -662,14 +643,6 @@ def _recorded_tool_valid(value: Any, tool: str, inputs: dict[str, Any]) -> bool:
     }:
         return False
     receipt = value.get("receipt")
-    binding = {
-        "artifact_manifest_sha256": inputs.get("scenario_manifest_sha256"),
-        "scenario_id": inputs.get("scenario_id"),
-        "market_manifest_sha256": inputs.get("market_manifest_sha256"),
-        "document_manifest_sha256": inputs.get("document_manifest_sha256"),
-        "market_readiness_sha256": inputs.get("market_readiness_sha256"),
-        "document_readiness_sha256": inputs.get("document_readiness_sha256"),
-    }
     try:
         timestamp = datetime.fromisoformat(str(value["as_of"]).replace("Z", "+00:00"))
     except (KeyError, ValueError):
@@ -688,10 +661,9 @@ def _recorded_tool_valid(value: Any, tool: str, inputs: dict[str, Any]) -> bool:
         and value.get("limitations_sha256") == _digest(value["limitations"])
         and isinstance(receipt, dict)
         and set(receipt) == RECEIPT_KEYS
-        and all(receipt.get(key) == expected for key, expected in binding.items())
+        and receipt.get("scenario_id") == inputs.get("scenario_id")
         and receipt.get("engine") == "cudf"
         and receipt.get("gpu_executed") is True
-        and receipt.get("fallback_used") is False
         and isinstance(receipt.get("device"), str)
         and bool(receipt["device"].strip())
         and not isinstance(receipt.get("duration_ms"), bool)
@@ -1476,15 +1448,7 @@ def qualify(
                     _tool_observation(context, "get_price_context", context_args, input_binding),
                     _tool_observation(shock, "detect_market_shock", shock_args, input_binding),
                 ]
-                performance = {row["ticker"]: row for row in context["data"]["performance"]}
-                actual = {
-                    "close": performance.get(ticker, {}).get("close"),
-                    "volume": performance.get(ticker, {}).get("volume"),
-                    "return_pct": shock["data"].get("return_pct"),
-                    "benchmark_return_pct": shock["data"].get("benchmark_return_pct"),
-                    "market_adjusted_return_pct": shock["data"].get("market_adjusted_return_pct"),
-                    "volume_ratio": shock["data"].get("volume_ratio"),
-                }
+                actual = _tool_values(context, shock)
                 values = {"expected": expected, "actual": actual}
                 checks = _parity_checks(values, tool_observations, 1e-6)
                 if not all(checks.values()):
@@ -1670,18 +1634,20 @@ def _expected_request_records(scenario: Path, manifest: dict[str, Any], samples:
     return _seeded_requests(manifest["coverage"]["targets"], market["benchmark_policy"], sessions, samples)
 
 
-def _recorded_actual(item: dict[str, Any]) -> dict[str, Any]:
-    price, shock = item["tools"]
-    performance = {row["ticker"]: row for row in price["data"].get("performance", [])}
-    target = performance.get(item["ticker"], {})
+def _tool_values(price: dict[str, Any], shock: dict[str, Any]) -> dict[str, Any]:
+    """Map get_price_context and detect_market_shock data onto the control's values."""
     return {
-        "close": target.get("close"),
-        "volume": target.get("volume"),
-        "return_pct": shock["data"].get("return_pct"),
-        "benchmark_return_pct": shock["data"].get("benchmark_return_pct"),
-        "market_adjusted_return_pct": shock["data"].get("market_adjusted_return_pct"),
+        "close": price["data"].get("adjusted_close"),
+        "volume": price["data"].get("volume"),
+        "return_pct": shock["data"].get("return_1d_pct"),
+        "benchmark_return_pct": shock["data"].get("benchmark_return_1d_pct"),
+        "market_adjusted_return_pct": shock["data"].get("benchmark_relative_return_pp"),
         "volume_ratio": shock["data"].get("volume_ratio"),
     }
+
+
+def _recorded_actual(item: dict[str, Any]) -> dict[str, Any]:
+    return _tool_values(*item["tools"])
 
 
 def _validate_report_value(

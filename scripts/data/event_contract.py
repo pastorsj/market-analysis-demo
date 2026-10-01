@@ -8,8 +8,11 @@ from datetime import date, datetime
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
+import shutil
+import tempfile
 from typing import Any
 from collections.abc import Iterable
 
@@ -1249,3 +1252,120 @@ def validate_event_artifact(root: Path) -> tuple[dict[str, Any], dict[str, Any]]
     ):
         raise EventContractError([EventIssue("event_artifact_projection", "manifest")])
     return manifest, payload
+
+
+def prepare_event_catalog(
+    catalog: dict[str, Any],
+    *,
+    catalog_sha256: str,
+    schema_sha256: str,
+    scenario: dict[str, Any],
+) -> dict[str, Any]:
+    """Qualify every curated event against the bound scenario; market gaps exclude an event."""
+    binding = scenario["binding"]
+    events: list[dict[str, Any]] = []
+    excluded: list[dict[str, Any]] = []
+    for event in catalog["events"]:
+        qualification = qualify_event(event, scenario)
+        if qualification["market"]["status"] != "ready":
+            excluded.append({"event_id": event["event_id"], "gaps": qualification["market"]["gaps"]})
+            continue
+        published = {key: value for key, value in event.items() if key != "known_gaps"}
+        events.append({**published, "qualification": qualification})
+    ready = sum(event["qualification"]["status"] == "ready" for event in events)
+    identity = {"catalog_sha256": catalog_sha256, "schema_sha256": schema_sha256, "binding": binding}
+    payload = {
+        "schema_version": 1,
+        "artifact_id": "shock-events-" + sha256_bytes(canonical_json(identity))[:16],
+        "catalog_id": catalog["catalog_id"],
+        "calendar": catalog["calendar"],
+        "timezone": catalog["timezone"],
+        "binding": binding,
+        "categories": catalog["categories"],
+        "events": events,
+        "excluded_events": excluded,
+        "summary": {
+            "declared_events": len(catalog["events"]),
+            "published_events": len(events),
+            "ready_events": ready,
+            "partial_events": len(events) - ready,
+            "excluded_events": len(excluded),
+        },
+    }
+    validate_prepared_catalog(payload)
+    return payload
+
+
+def write_event_artifact(
+    payload: dict[str, Any],
+    *,
+    catalog_sha256: str,
+    schema_sha256: str,
+    artifacts_root: Path,
+) -> Path:
+    """Write a content-addressed artifact once; an existing one must be byte-identical."""
+    catalog_body = canonical_json(payload) + b"\n"
+    manifest = {
+        "schema_version": 1,
+        "artifact_kind": "shock-event-catalog-v1",
+        "artifact_id": payload["artifact_id"],
+        "catalog_id": payload["catalog_id"],
+        "catalog_sha256": catalog_sha256,
+        "schema_sha256": schema_sha256,
+        "binding": payload["binding"],
+        "summary": payload["summary"],
+        "artifacts": [
+            {
+                "path": "catalog.json",
+                "sha256": sha256_bytes(catalog_body),
+                "bytes": len(catalog_body),
+                "records": len(payload["events"]),
+                "media_type": "application/json",
+            }
+        ],
+    }
+    files = {"catalog.json": catalog_body, "manifest.json": canonical_json(manifest) + b"\n"}
+    target = artifacts_root / payload["artifact_id"]
+    if target.exists() or target.is_symlink():
+        if target.is_symlink() or not target.is_dir():
+            raise EventContractError([EventIssue("event_artifact_root", target.name)])
+        existing = {path.name for path in target.iterdir()}
+        if existing != set(files) or any(
+            (target / name).read_bytes() != body for name, body in files.items()
+        ):
+            raise EventContractError([EventIssue("event_artifact_identity", target.name)])
+        return target
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    # Stage under the final name (validation checks it), then rename into place.
+    staging_root = Path(tempfile.mkdtemp(prefix=".building.", dir=artifacts_root))
+    try:
+        staged = staging_root / target.name
+        staged.mkdir(mode=0o755)
+        for name, body in files.items():
+            descriptor = os.open(staged / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(body)
+                os.fsync(stream.fileno())
+        validate_event_artifact(staged)
+        os.rename(staged, target)
+    finally:
+        shutil.rmtree(staging_root, ignore_errors=True)
+    return target
+
+
+def build_event_artifact(
+    catalog_path: Path,
+    scenario_root: Path,
+    artifacts_root: Path,
+    schema_path: Path = DEFAULT_SCHEMA,
+) -> Path:
+    catalog, catalog_sha256, schema_sha256 = load_event_catalog(catalog_path, schema_path)
+    payload = prepare_event_catalog(
+        catalog,
+        catalog_sha256=catalog_sha256,
+        schema_sha256=schema_sha256,
+        scenario=load_scenario_binding(scenario_root),
+    )
+    return write_event_artifact(
+        payload, catalog_sha256=catalog_sha256, schema_sha256=schema_sha256, artifacts_root=artifacts_root
+    )
