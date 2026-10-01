@@ -1,22 +1,48 @@
-"""Prepare only the application's isolated, pinned OpenShell infrastructure."""
+"""Prepare only the application's isolated, pinned OpenShell gateway.
+
+The gateway runs as a systemd user unit modeled on the upstream package unit:
+config preflight and idempotent local mTLS generation run before every start.
+All OpenShell state (database, TLS and JWT material, CLI registration) stays
+under /srv/market-shock/openshell, separate from any personal OpenShell install.
+"""
 
 from pathlib import Path
 import json
 import os
 import subprocess
+import sys
 import time
-import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = Path("/srv/market-shock/openshell")
-SERVICE = "market-shock-openshell.service"
-FORWARD_SERVICE = "market-shock-openshell-forward.service"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.spark.openshell_runtime import (  # noqa: E402
+    CLI,
+    GATEWAY,
+    GATEWAY_CONFIG,
+    GATEWAY_NAME,
+    GATEWAY_SERVICE,
+    RUNTIME,
+    VERSION,
+)
+
+ENDPOINT = "https://127.0.0.1:17671"
+TLS_DIR = RUNTIME / "tls"
+# Removed in the 0.1.2 migration: the CLI now tracks background forwards itself.
+RETIRED_UNITS = ("market-shock-openshell-forward.service",)
 
 
-def run(args, *, env=None, input=None):
-    result = subprocess.run(args, env=env, input=input, capture_output=True, timeout=60)
+def run(args, *, env=None):
+    result = subprocess.run(
+        [str(arg) for arg in args],
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        timeout=60,
+    )
     if result.returncode:
-        stage = " ".join([Path(args[0]).name, *args[1:3]])
+        stage = " ".join([Path(str(args[0])).name, *map(str, args[1:3])])
         raise RuntimeError(f"OpenShell infrastructure stage {stage} failed; private output withheld")
     return result.stdout
 
@@ -27,58 +53,27 @@ def create_private(path, content):
         stream.write(content)
 
 
-def prepare_keys(directory):
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    paths = [directory / name for name in ("signing.pem", "public.pem", "kid")]
-    if any(path.exists() or path.is_symlink() for path in paths):
-        if not all(path.is_file() and not path.is_symlink() for path in paths):
-            raise RuntimeError("Incomplete gateway keys; recover explicitly without rotating identity")
-        if paths[0].stat().st_mode & 0o077:
-            raise RuntimeError("Gateway signing key permissions must be owner-only")
-        # Public material may have been created under the operator's normal
-        # umask. Tighten permissions without rewriting any identity bytes.
-        for path in paths[1:]:
-            path.chmod(0o600)
-        return
-    private = run(["openssl", "genpkey", "-algorithm", "Ed25519"])
-    public = run(["openssl", "pkey", "-pubout"], input=private)
-    for path, value in zip(paths, [private, public, str(uuid.uuid4()).encode()], strict=True):
-        create_private(path, value)
-
-
 def service_text():
     return f'''[Unit]
-Description=Market Shock OpenShell gateway (pinned 0.0.116)
-After=network.target
+Description=Market Shock OpenShell gateway (pinned {VERSION})
+After=default.target
 
 [Service]
+Type=simple
+Environment=OPENSHELL_LOCAL_TLS_DIR={TLS_DIR}
 Environment=XDG_CONFIG_HOME={RUNTIME}/config
 Environment=XDG_DATA_HOME={RUNTIME}/data
 Environment=XDG_STATE_HOME={RUNTIME}/state
-ExecStart={RUNTIME}/0.0.116/openshell-gateway --config "{ROOT}/scripts/spark/openshell/gateway.toml"
+ExecStartPre={GATEWAY} config preflight --path "{GATEWAY_CONFIG}"
+ExecStartPre={GATEWAY} generate-certs --output-dir {TLS_DIR} --server-san host.openshell.internal
+ExecStart={GATEWAY} --config "{GATEWAY_CONFIG}"
 Restart=on-failure
-RestartSec=5
+RestartSec=5s
+PrivateTmp=true
 UMask=0077
 
 [Install]
 WantedBy=default.target
-'''
-
-
-def forward_service_text():
-    return f'''[Unit]
-Description=Market Shock OpenShell agent API forward
-After={SERVICE}
-Requires={SERVICE}
-
-[Service]
-Environment=XDG_CONFIG_HOME={RUNTIME}/config
-Environment=XDG_DATA_HOME={RUNTIME}/data
-Environment=XDG_STATE_HOME={RUNTIME}/state
-ExecStart=/usr/bin/python3 "{ROOT}/scripts/spark/openshell_runtime.py" serve-forward
-Restart=on-failure
-RestartSec=2
-UMask=0077
 '''
 
 
@@ -93,71 +88,45 @@ def write_unit(unit, desired):
     return True
 
 
-def register_gateway(cli, env):
-    registrations = json.loads(run([cli, "gateway", "list", "-o", "json"], env=env))
-    matches = [item for item in registrations if item.get("name") == "market-shock"]
+def retire_units(units):
+    changed = False
+    for name in RETIRED_UNITS:
+        unit = units / name
+        if unit.is_symlink() or unit.exists():
+            subprocess.run(
+                ["systemctl", "--user", "disable", "--now", name],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=60,
+            )
+            unit.unlink()
+            changed = True
+    return changed
+
+
+def register_gateway(env):
+    registrations = json.loads(run([CLI, "gateway", "list", "-o", "json"], env=env))
+    matches = [item for item in registrations if item.get("name") == GATEWAY_NAME]
     if matches:
         if (
             len(matches) != 1
-            or matches[0].get("endpoint") != "http://127.0.0.1:17671"
+            or matches[0].get("endpoint") != ENDPOINT
             or matches[0].get("is_remote")
+            or matches[0].get("auth") != "mtls"
         ):
             raise RuntimeError(
-                "Existing market-shock gateway registration does not match the approved local endpoint"
+                "Existing market-shock gateway registration does not match the approved local mTLS endpoint"
             )
         return
-    run([cli, "gateway", "add", "http://127.0.0.1:17671", "--name", "market-shock", "--local"], env=env)
-
-
-def prepare_network():
-    name = "market-shock_openshell"
-    existing = (
-        run(["docker", "network", "ls", "--filter", f"name=^{name}$", "--format", "{{.Name}}"])
-        .decode()
-        .splitlines()
-    )
-    if existing and existing != [name]:
-        raise RuntimeError("OpenShell network identity is ambiguous")
-    if not existing:
-        run(
-            [
-                "docker",
-                "network",
-                "create",
-                "--driver",
-                "bridge",
-                "--subnet",
-                "172.22.0.0/16",
-                "--gateway",
-                "172.22.0.1",
-                "--label",
-                "com.nvidia.market-shock.owner=openshell",
-                name,
-            ]
-        )
-    networks = json.loads(run(["docker", "network", "inspect", name]))
-    if len(networks) != 1:
-        raise RuntimeError("OpenShell network identity is ambiguous")
-    network = networks[0]
-    configs = network.get("IPAM", {}).get("Config", [])
-    if (
-        network.get("Name") != name
-        or network.get("Driver") != "bridge"
-        or network.get("Internal")
-        or len(configs) != 1
-        or configs[0].get("Subnet") != "172.22.0.0/16"
-        or configs[0].get("Gateway") != "172.22.0.1"
-    ):
-        raise RuntimeError(
-            "Existing OpenShell bridge does not match the pinned callback network; no network was replaced"
-        )
+    # --local copies the client bundle from OPENSHELL_LOCAL_TLS_DIR.
+    run([CLI, "gateway", "add", ENDPOINT, "--name", GATEWAY_NAME, "--local"], env=env)
 
 
 def main():
     os.umask(0o077)
-    prepare_network()
-    prepare_keys(RUNTIME / "keys")
     env = os.environ.copy()
+    env["OPENSHELL_LOCAL_TLS_DIR"] = str(TLS_DIR)
+    env["NO_COLOR"] = "1"
     for key, directory in [
         ("XDG_CONFIG_HOME", "config"),
         ("XDG_DATA_HOME", "data"),
@@ -166,22 +135,26 @@ def main():
         path = RUNTIME / directory
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         env[key] = str(path)
+    TLS_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for binary in (CLI, GATEWAY):
+        if run([binary, "--version"]).decode().strip() != f"{binary.name} {VERSION}":
+            raise RuntimeError("OpenShell version mismatch; install the pinned release first")
+    run([GATEWAY, "config", "preflight", "--path", GATEWAY_CONFIG], env=env)
     units = Path.home() / ".config/systemd/user"
     units.mkdir(parents=True, exist_ok=True)
-    # Install, but never enable/start, the forward before app dependencies exist.
-    gateway_changed = write_unit(units / SERVICE, service_text())
-    forward_changed = write_unit(units / FORWARD_SERVICE, forward_service_text())
-    if gateway_changed or forward_changed:
+    changed = retire_units(units)
+    changed = write_unit(units / GATEWAY_SERVICE, service_text()) or changed
+    if changed:
         run(["systemctl", "--user", "daemon-reload"])
-    run(["systemctl", "--user", "enable", SERVICE])
-    # start is deliberately idempotent: existing gateways are not restarted.
-    run(["systemctl", "--user", "start", SERVICE])
-    cli = str(RUNTIME / "0.0.116/openshell")
-    register_gateway(cli, env)
+        # Apply a changed unit; an unchanged running gateway is left alone.
+        run(["systemctl", "--user", "try-restart", GATEWAY_SERVICE])
+    run(["systemctl", "--user", "enable", GATEWAY_SERVICE])
+    run(["systemctl", "--user", "start", GATEWAY_SERVICE])
     for attempt in range(30):
         try:
-            run([cli, "-g", "market-shock", "status"], env=env)
-            print("Application OpenShell gateway prepared; no existing keys were replaced")
+            register_gateway(env)
+            run([CLI, "-g", GATEWAY_NAME, "status"], env=env)
+            print("Application OpenShell gateway prepared; no existing TLS identity was replaced")
             return
         except RuntimeError:
             if attempt == 29:

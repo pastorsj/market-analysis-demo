@@ -37,8 +37,7 @@ LABEL com.nvidia.market-shock.build-input-schema="market-shock-build-input-v1" \
       com.nvidia.market-shock.switchyard-commit="1759dfdff95ed2718f6dd2afef6541654bbd0116" \
       com.nvidia.market-shock.langchain-nvidia-commit="9aa3de853238aa0bcddb799c733a2e189e98078f"
 WORKDIR /opt/market-agent
-# Network tools available to the OpenShell sandbox supervisor that runs this image.
-RUN apt-get update && apt-get install -y --no-install-recommends iproute2 iptables nftables ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:0.8.22@sha256:9874eb7afe5ca16c363fe80b294fe700e460df29a55532bbfea234a0f12eddb1 /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
@@ -54,5 +53,5 @@ RUN uv export --frozen --no-dev --no-emit-project --no-hashes \
     && rm -rf /wheels /tmp/requirements.txt
 WORKDIR /sandbox
 EXPOSE 2024
-# OpenShell runs the process (as the prepared host user) and probes /health/ready itself.
+# OpenShell runs the process (as the policy's UID 1000) and probes /health/ready itself.
 HEALTHCHECK NONE

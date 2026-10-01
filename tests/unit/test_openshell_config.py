@@ -20,7 +20,7 @@ def environment(**updates):
 
 
 def test_endpoint_and_python_scoped_profiles():
-    safe, policy, profiles = config.prepare_inputs(environment(), {"network_policies": {}})
+    safe, profiles = config.prepare_inputs(environment())
     assert not config.SECRET_KEYS.intersection(safe)
     assert len(profiles) == 2
     profile, key, value = profiles[0]
@@ -35,24 +35,31 @@ def test_endpoint_and_python_scoped_profiles():
         }
     ]
     assert profile["binaries"] == [config.PYTHON]
+    assert profile["credentials"] == [
+        {
+            "name": "api_key",
+            "env_vars": ["NVIDIA_INFERENCE_API_KEY"],
+            "required": True,
+            "auth_style": "bearer",
+            "header_name": "authorization",
+        }
+    ]
+    assert profile["id"].startswith("market-inference-")
     assert key == "NVIDIA_INFERENCE_API_KEY" and value == "secret-inference"
-    assert "secret-inference" not in json.dumps([safe, policy, profile])
+    assert "secret-inference" not in json.dumps([safe, profile])
     assert safe["LANGSMITH_PROJECT_URL"].startswith("https://smith.langchain.com/o/")
-    granted_hosts = {
-        endpoint["host"] for item in policy["network_policies"].values() for endpoint in item["endpoints"]
-    }
-    assert "api.smith.langchain.com" in granted_hosts
-    assert "smith.langchain.com" not in granted_hosts
+    # Attached profiles are the only remote grants; the browser-only project link is never one.
+    granted_hosts = {endpoint["host"] for item, _, _ in profiles for endpoint in item["endpoints"]}
+    assert granted_hosts == {"inference.example", "api.smith.langchain.com"}
 
 
 def test_disabled_remote_and_telemetry_have_no_network_grants():
-    safe, policy, profiles = config.prepare_inputs(
+    safe, profiles = config.prepare_inputs(
         environment(
             REMOTE_ROUTING_ENABLED="false", NEMO_RELAY_LANGSMITH_ENABLED="false", LANGSMITH_PROJECT_URL=""
-        ),
-        {"network_policies": {}},
+        )
     )
-    assert profiles == [] and policy["network_policies"] == {}
+    assert profiles == []
     assert not config.SECRET_KEYS.intersection(safe)
 
 
@@ -75,12 +82,12 @@ def test_disabled_remote_and_telemetry_have_no_network_grants():
 )
 def test_invalid_configuration_fails_closed(updates):
     with pytest.raises(config.PreparationError):
-        config.prepare_inputs(environment(**updates), {"network_policies": {}})
+        config.prepare_inputs(environment(**updates))
 
 
 def test_project_link_is_rejected_when_trace_export_is_disabled():
     with pytest.raises(config.PreparationError, match="project link"):
-        config.prepare_inputs(environment(NEMO_RELAY_LANGSMITH_ENABLED="false"), {"network_policies": {}})
+        config.prepare_inputs(environment(NEMO_RELAY_LANGSMITH_ENABLED="false"))
 
 
 def test_credentials_only_in_child_environment(monkeypatch):
@@ -181,25 +188,30 @@ def test_failed_preparation_invalidates_old_readiness(tmp_path, monkeypatch):
     (tmp_path / "providers.json").write_text("[]")
     monkeypatch.setenv("COMPOSE_ENV_FILE", str(tmp_path / "missing.env"))
     with pytest.raises(OSError):
-        config.prepare(tmp_path, tmp_path / "unused")
+        config.prepare(tmp_path)
     assert not (tmp_path / "providers.json").exists()
 
 
+def fake_gateway(calls, *, profiles=(), providers=()):
+    def fake(args, env=None):
+        calls.append((args, env))
+        if args[3:5] == ["profile", "list"]:
+            return json.dumps([{"id": item} for item in profiles])
+        if args[3:5] == ["provider", "list"]:
+            return json.dumps({"providers": [{"name": item} for item in providers], "next_page_token": ""})
+        return ""
+
+    return fake
+
+
 def test_full_preparation_writes_no_secrets(tmp_path, monkeypatch):
-    base = tmp_path / "base.yaml"
-    base.write_text("network_policies: {}")
     env_file = tmp_path / "private.env"
     env_file.write_text(ENV_FILE)
     monkeypatch.setenv("COMPOSE_ENV_FILE", str(env_file))
     output = tmp_path / "prepared"
     calls = []
-
-    def fake(args, env=None):
-        calls.append((args, env))
-        return ""
-
-    monkeypatch.setattr(config, "command", fake)
-    config.prepare(output, base)
+    monkeypatch.setattr(config, "command", fake_gateway(calls))
+    config.prepare(output)
     for path in output.iterdir():
         assert "secret-inference" not in path.read_text()
         assert "secret-langsmith" not in path.read_text()
@@ -208,8 +220,23 @@ def test_full_preparation_writes_no_secrets(tmp_path, monkeypatch):
     for argv, _env in calls:
         assert "secret-inference" not in repr(argv)
         assert "secret-langsmith" not in repr(argv)
-    settings = next(argv for argv, _ in calls if "settings" in argv)
-    assert "--yes" in settings
+    stages = [argv[3:5] for argv, _ in calls]
+    assert stages.count(["profile", "import"]) == 2 and stages.count(["provider", "create"]) == 2
+    assert not (output / "policy.yaml").exists()
     launch_env = json.loads((output / "env.json").read_text())
     assert launch_env["REMOTE_ROUTING_ENABLED"] == "true"
     assert not config.SECRET_KEYS.intersection(launch_env)
+
+
+def test_rerun_reuses_imported_profiles_and_rotates_credentials(tmp_path, monkeypatch):
+    env_file = tmp_path / "private.env"
+    env_file.write_text(ENV_FILE)
+    monkeypatch.setenv("COMPOSE_ENV_FILE", str(env_file))
+    _, profiles = config.prepare_inputs(config.agent_environment(config.read_env_file(env_file)))
+    ids = [profile["id"] for profile, _, _ in profiles]
+    calls = []
+    monkeypatch.setattr(config, "command", fake_gateway(calls, profiles=ids, providers=ids))
+    config.prepare(tmp_path / "prepared")
+    stages = [argv[3:5] for argv, _ in calls]
+    assert ["profile", "import"] not in stages and ["provider", "create"] not in stages
+    assert stages.count(["provider", "update"]) == 2

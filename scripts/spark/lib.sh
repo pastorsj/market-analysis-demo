@@ -56,13 +56,14 @@ spark_prepare_web_bridge() {
 }
 
 spark_require_public_boundary() {
-  # Only web may publish a host port, and only on 127.0.0.1:3000 (declared and running).
+  # Only web (3000), tools (8000), and model (8001) publish, and only on 127.0.0.1
+  # (declared and running). OpenShell reaches tools and model via host.openshell.internal.
   "${COMPOSE[@]}" config --format json \
     | python3 "$REPO_ROOT/scripts/spark/process_contract.py" static-ports \
-    || spark_die "compose.yaml must publish only web on 127.0.0.1:3000"
+    || spark_die "compose.yaml must publish only web, tools, and model on 127.0.0.1:3000, :8000, and :8001"
   "${COMPOSE[@]}" ps --format json \
     | python3 "$REPO_ROOT/scripts/spark/process_contract.py" running-ports \
-    || spark_die "only web/tools/model may run in Compose; only web may publish 127.0.0.1:3000"
+    || spark_die "only web/tools/model may run in Compose, publishing only 127.0.0.1:3000, :8000, and :8001"
 }
 
 spark_json_status_pass() {

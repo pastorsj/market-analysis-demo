@@ -7,7 +7,7 @@ guard invariants that Compose itself cannot express.
 Usage:
   process_contract.py receipt PATH               print "service<TAB>name<TAB>id<TAB>build_input" rows
   process_contract.py compose < config.json      no entrypoint overrides; only model sets a command
-  process_contract.py static-ports < config.json only web publishes 127.0.0.1:3000
+  process_contract.py static-ports < config.json only web, tools, and model publish, on loopback
   process_contract.py running-ports < ps.jsonl   same invariant for running containers
   process_contract.py running SERVICE IMAGE_ENTRYPOINT CONTAINER_ENTRYPOINT EXPECTED_CMD CONTAINER_CMD
 """
@@ -32,7 +32,16 @@ IMAGE_NAMES = {
     "tools": "market-shock-tools:latest",
     "model": MODEL_IMAGE,
 }
-PUBLISHED = ("web", "127.0.0.1", 3000, 3000)
+# web serves the browser; tools and model serve the OpenShell supervisor through
+# host.openshell.internal, which the Docker driver pins to host loopback.
+PUBLISHED = frozenset(
+    {
+        ("web", "127.0.0.1", 3000, 3000),
+        ("tools", "127.0.0.1", 8000, 8000),
+        ("model", "127.0.0.1", 8001, 8001),
+    }
+)
+PUBLISHED_RULE = "only web, tools, and model may publish, on 127.0.0.1:3000, :8000, and :8001"
 IMAGE_ID = re.compile(r"sha256:[a-f0-9]{64}")
 HEX_DIGEST = re.compile(r"[a-f0-9]{64}")
 MAX_BYTES = 1_048_576
@@ -123,8 +132,8 @@ def validate_static_ports(raw: bytes) -> None:
             published.append(
                 (service, port.get("host_ip"), int(port.get("published", 0)), port.get("target"))
             )
-    if published != [PUBLISHED]:
-        raise ContractError("only web may publish a host port, on 127.0.0.1:3000")
+    if len(published) != len(PUBLISHED) or set(published) != PUBLISHED:
+        raise ContractError(PUBLISHED_RULE)
 
 
 def validate_running_ports(lines: list[str]) -> None:
@@ -140,8 +149,8 @@ def validate_running_ports(lines: list[str]) -> None:
             for port in row.get("Publishers") or []:
                 if port.get("PublishedPort"):
                     published.add((service, port.get("URL"), port["PublishedPort"], port.get("TargetPort")))
-    if not published <= {PUBLISHED}:
-        raise ContractError("only web may publish a host port, on 127.0.0.1:3000")
+    if not published <= PUBLISHED:
+        raise ContractError(PUBLISHED_RULE)
 
 
 def validate_running_process(

@@ -115,11 +115,12 @@ app records each model call's model, latency, and token counts.
 
 ## Where does the agent run?
 
-The agent runs inside an NVIDIA OpenShell 0.0.116 sandbox, and there is no
+The agent runs inside an NVIDIA OpenShell 0.1.2 sandbox, and there is no
 unsandboxed fallback. The policy is in `scripts/spark/openshell/policy.yaml`.
-The API keys are stored in endpoint-bound OpenShell providers. Only the
-sandboxed agent receives them. They are never passed to the web, tools, or
-model services.
+The API keys are stored in endpoint-bound OpenShell providers. The sandboxed
+agent sees only placeholders, which OpenShell replaces with the real key on
+requests to the matching endpoint. The keys are never passed to the web,
+tools, or model services.
 
 ## What data does it use?
 

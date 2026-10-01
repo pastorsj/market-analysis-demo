@@ -19,31 +19,47 @@ landlock:
 process:
   run_as_user: "1000"
   run_as_group: "1000"
+# host.openshell.internal is the OpenShell Docker driver's reserved alias for
+# the gateway host; tools and model are published there on loopback only.
+# Remote inference and LangSmith access come from attached provider profiles.
 network_policies:
   tools:
     name: market-tools
     endpoints:
-      - host: tools
+      - host: host.openshell.internal
         port: 8000
-        protocol: rest
+        path: /mcp
+        protocol: mcp
         enforcement: enforce
         rules:
-          - {allow: {method: GET, path: /mcp}}
-          - {allow: {method: POST, path: /mcp}}
-          - {allow: {method: DELETE, path: /mcp}}
-          - {allow: {method: GET, path: /health}}
+          - allow: {method: initialize}
+          - allow: {method: notifications/initialized}
+          - allow: {method: ping}
+          # The MCP client lists tools to validate structured results before calls.
+          - allow: {method: tools/list}
+          - allow: {method: resources/read}
+          - allow:
+              method: tools/call
+              tool:
+                any:
+                  - get_price_context
+                  - detect_market_shock
+                  - find_historical_analogues
+                  - map_comovement
+                  - predict_volatility_risk
+                  - search_news
+                  - project_news_topics
     binaries:
-      - {path: /usr/local/bin/python3.12}
+      - path: /usr/local/bin/python3.12
   local_model:
     name: approved-local-nemotron
     endpoints:
-      - host: model
+      - host: host.openshell.internal
         port: 8001
         protocol: rest
         enforcement: enforce
         rules:
-          - {allow: {method: POST, path: /v1/chat/completions}}
-          - {allow: {method: GET, path: /v1/models}}
-          - {allow: {method: GET, path: /health}}
+          - allow: {method: POST, path: /v1/chat/completions}
+          - allow: {method: GET, path: /v1/models}
     binaries:
-      - {path: /usr/local/bin/python3.12}
+      - path: /usr/local/bin/python3.12

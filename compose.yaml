@@ -1,7 +1,10 @@
 name: market-shock
 # The agent (agent:2024) is not a Compose service: OpenShell runs it from the
 # market-shock-agent image (scripts/spark/openshell_runtime.py) with the
-# environment prepared by scripts/spark/openshell_config.py.
+# environment prepared by scripts/spark/openshell_config.py. Its host-networked
+# supervisor reaches tools and model at host.openshell.internal, which the
+# OpenShell Docker driver pins to host loopback; nothing else is published
+# beyond 127.0.0.1.
 services:
   web:
     build:
@@ -23,8 +26,8 @@ services:
       context: ./services/tools
       args:
         MARKET_SHOCK_BUILD_INPUT_SHA256: "${MARKET_SHOCK_TOOLS_BUILD_INPUT_SHA256:-unverified}"
-    expose: ["8000"]
-    networks: [backend, openshell]
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [backend, published]
     restart: unless-stopped
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ipc: host
@@ -47,8 +50,8 @@ services:
 
   model:
     image: vllm/vllm-openai:v0.27.1@sha256:0a51ea5b4ae2dc5d81890e5173f54203d2a3ae0cfffe51b8fd2afd4391bfd967
-    expose: ["8001"]
-    networks: [backend, openshell]
+    ports: ["127.0.0.1:8001:8001"]
+    networks: [backend, published]
     restart: unless-stopped
     ipc: host
     shm_size: 16gb
@@ -101,5 +104,7 @@ services:
 
 networks:
   edge: {}
+  # No default route: the data qualifier joins only this network to reach tools.
   backend: {internal: true}
-  openshell: {external: true, name: market-shock_openshell}
+  # Carries only the loopback port publishing; Docker cannot publish from an internal network.
+  published: {}

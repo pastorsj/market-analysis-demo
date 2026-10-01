@@ -209,32 +209,27 @@ def write_json(path, value):
 
 
 def agent_stopped():
-    env = dict(os.environ)
-    for name, suffix in (
-        ("XDG_CONFIG_HOME", "config"),
-        ("XDG_DATA_HOME", "data"),
-        ("XDG_STATE_HOME", "state"),
-    ):
-        env[name] = str(ROOT / "openshell" / suffix)
+    # Imported lazily: openshell_runtime imports this module for its start lock.
+    repository = str(Path(__file__).resolve().parents[2])
+    if repository not in sys.path:
+        sys.path.insert(0, repository)
+    from scripts.spark.openshell_runtime import CLI, GATEWAY_NAME, NAME, environment
+
     try:
         result = subprocess.run(
-            [
-                str(ROOT / "openshell/0.0.116/openshell"),
-                "-g",
-                "market-shock",
-                "sandbox",
-                "get",
-                "market-agent",
-                "--output",
-                "json",
-            ],
-            env=env,
+            [str(CLI), "-g", GATEWAY_NAME, "sandbox", "list", "--output", "json"],
+            env=environment(),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=30,
             check=True,
             text=True,
         )
-        if json.loads(result.stdout).get("phase") != "Stopped":
+        page = json.loads(result.stdout)
+        if page.get("next_page_token"):
+            return False
+        # An absent sandbox is stopped; the census below still guards live writers.
+        if any(row.get("name") == NAME and row.get("phase") != "Stopped" for row in page["sandboxes"]):
             return False
         identifiers = subprocess.run(
             ["docker", "ps", "--quiet", "--no-trunc"],
@@ -280,7 +275,7 @@ def agent_stopped():
                 ):
                     return False
         return True
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError, AttributeError):
         return False
 
 

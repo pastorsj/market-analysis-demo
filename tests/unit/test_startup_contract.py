@@ -56,11 +56,15 @@ def test_dependency_outage_wins_over_remote_off():
     assert agent_probe.classify(document, SCENARIO) == (agent_probe.NOT_READY, "unavailable: tools")
 
 
+def loopback(port):
+    return {"ports": [{"host_ip": "127.0.0.1", "published": str(port), "target": port}]}
+
+
 def compose(**services):
     base = {
-        "web": {"ports": [{"host_ip": "127.0.0.1", "published": "3000", "target": 3000}]},
-        "tools": {},
-        "model": {"command": ["--model", "/models/x"]},
+        "web": loopback(3000),
+        "tools": loopback(8000),
+        "model": {"command": ["--model", "/models/x"], **loopback(8001)},
     }
     return json.dumps({"services": {**base, **services}}).encode()
 
@@ -88,10 +92,14 @@ def test_compose_contract_rejects_overrides_and_extra_services(services):
     "services",
     [
         {"web": {"ports": [{"host_ip": "0.0.0.0", "published": "3000", "target": 3000}]}},
-        {"tools": {"ports": [{"host_ip": "127.0.0.1", "published": "8000", "target": 8000}]}},
+        {"tools": {"ports": [{"host_ip": "0.0.0.0", "published": "8000", "target": 8000}]}},
+        {"tools": {"ports": [{"host_ip": "127.0.0.1", "published": "8080", "target": 8000}]}},
+        {"tools": {}},
+        {"model": {"command": ["--model", "/models/x"], "ports": loopback(8001)["ports"] * 2}},
+        {"web": {"ports": loopback(3000)["ports"] + loopback(2024)["ports"]}},
     ],
 )
-def test_only_loopback_web_is_published(services):
+def test_only_the_loopback_service_ports_are_published(services):
     with pytest.raises(ContractError):
         process_contract.validate_static_ports(compose(**services))
 
@@ -101,8 +109,15 @@ def test_running_ports():
         "Service": "web",
         "Publishers": [{"URL": "127.0.0.1", "PublishedPort": 3000, "TargetPort": 3000, "Protocol": "tcp"}],
     }
-    tools = {"Service": "tools", "Publishers": [{"URL": "", "PublishedPort": 0, "TargetPort": 8000}]}
-    process_contract.validate_running_ports([json.dumps(web), json.dumps(tools)])
+    tools = {
+        "Service": "tools",
+        "Publishers": [{"URL": "127.0.0.1", "PublishedPort": 8000, "TargetPort": 8000}],
+    }
+    model = {"Service": "model", "Publishers": [{"URL": "", "PublishedPort": 0, "TargetPort": 8001}]}
+    process_contract.validate_running_ports([json.dumps(web), json.dumps(tools), json.dumps(model)])
+    swapped = {**tools, "Publishers": [{"URL": "127.0.0.1", "PublishedPort": 8001, "TargetPort": 8001}]}
+    with pytest.raises(ContractError):
+        process_contract.validate_running_ports([json.dumps(swapped)])
     with pytest.raises(ContractError):
         process_contract.validate_running_ports([json.dumps({"Service": "agent", "Publishers": []})])
     exposed = {**tools, "Publishers": [{"URL": "0.0.0.0", "PublishedPort": 8000, "TargetPort": 8000}]}

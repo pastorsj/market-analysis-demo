@@ -3,7 +3,8 @@
 Reads the operator environment file (COMPOSE_ENV_FILE, else .env, else
 .env.spark.example), maps it onto the agent's fixed environment, stores the
 credentials only in gateway-managed providers, and writes the non-secret rest
-to the sandbox launch file. Needs PyYAML (host python3 or the agent virtualenv).
+to the sandbox launch file. Each enabled remote endpoint gets its own provider
+profile; attaching the provider grants the sandbox exactly that endpoint.
 """
 
 from __future__ import annotations
@@ -15,13 +16,15 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 from urllib.parse import urlsplit
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIME = Path("/srv/market-shock/openshell")
-CLI = RUNTIME / "0.0.116/openshell"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.spark.openshell_runtime import CLI, GATEWAY_NAME, PREPARED, RUNTIME  # noqa: E402
+
 PYTHON = "/usr/local/bin/python3.12"
 # Agent variables that do not depend on operator configuration.
 FIXED_ENV = {
@@ -83,9 +86,9 @@ def openshell(*args: str, credential: tuple[str, str] | None = None) -> str:
     if credential:
         env[credential[0]] = credential[1]
     try:
-        return command([str(CLI), "-g", "market-shock", *args], env=env)
+        return command([str(CLI), "-g", GATEWAY_NAME, *args], env=env)
     except PreparationError:
-        stage = " ".join(args[:3] if args[:2] == ("provider", "profile") else args[:2])
+        stage = " ".join(args[:2])
         raise PreparationError(
             f"OpenShell {stage} failed; command output withheld to protect credentials."
         ) from None
@@ -176,7 +179,7 @@ def project_link(url: str) -> str:
         ) from None
 
 
-def prepare_inputs(environment: dict[str, str], policy: dict) -> tuple[dict, dict, list]:
+def prepare_inputs(environment: dict[str, str]) -> tuple[dict, list]:
     safe = {key: str(value) for key, value in environment.items() if key in SAFE_KEYS and value is not None}
     project = safe.get("LANGSMITH_PROJECT_URL", "").strip()
     tracing = enabled(safe.get("NEMO_RELAY_LANGSMITH_ENABLED", "false"))
@@ -187,13 +190,15 @@ def prepare_inputs(environment: dict[str, str], policy: dict) -> tuple[dict, dic
     if project:
         safe["LANGSMITH_PROJECT_URL"] = project_link(project)
     profiles = []
-    for flag, url_key, secret_key, stem, category in (
+    # (flag, endpoint key, credential key, profile stem, category, credential placement)
+    for flag, url_key, secret_key, stem, category, placement in (
         (
             "REMOTE_ROUTING_ENABLED",
             "NVIDIA_BASE_URL",
             "NVIDIA_INFERENCE_API_KEY",
             "market-inference",
             "inference",
+            {"auth_style": "bearer", "header_name": "authorization"},
         ),
         (
             "NEMO_RELAY_LANGSMITH_ENABLED",
@@ -201,6 +206,7 @@ def prepare_inputs(environment: dict[str, str], policy: dict) -> tuple[dict, dic
             "LANGSMITH_API_KEY",
             "market-langsmith",
             "other",
+            {"auth_style": "header", "header_name": "x-api-key"},
         ),
     ):
         if not enabled(safe.get(flag, "false")):
@@ -212,19 +218,14 @@ def prepare_inputs(environment: dict[str, str], policy: dict) -> tuple[dict, dic
             "display_name": stem,
             "category": category,
             "inference_capable": category == "inference",
-            "credentials": [{"name": "api-key", "env_vars": [secret_key], "required": True}],
+            "credentials": [{"name": "api_key", "env_vars": [secret_key], "required": True, **placement}],
             "endpoints": [bound],
             "binaries": [PYTHON],
         }
         identity = hashlib.sha256(json.dumps(profile, sort_keys=True).encode()).hexdigest()[:12]
         profile["id"] = f"{stem}-{identity}"
         profiles.append((profile, secret_key, environment[secret_key]))
-        policy["network_policies"][stem.replace("-", "_")] = {
-            "name": stem,
-            "endpoints": [bound],
-            "binaries": [{"path": PYTHON}],
-        }
-    return safe, policy, profiles
+    return safe, profiles
 
 
 def private_json(path: Path, value: object) -> None:
@@ -236,27 +237,33 @@ def private_json(path: Path, value: object) -> None:
         stream.write("\n")
 
 
-def prepare(output: Path, base_policy: Path) -> None:
+def listed(output: str, key: str | None, field: str) -> set[str]:
+    page = json.loads(output)
+    rows = page if key is None else page[key]
+    if key is not None and page.get("next_page_token"):
+        raise PreparationError("Too many OpenShell records to reconcile; clean up the gateway explicitly.")
+    return {row[field] for row in rows}
+
+
+def prepare(output: Path) -> None:
     # A failure invalidates the previous launch receipt instead of leaving stale readiness.
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
     receipt = output / "providers.json"
     receipt.unlink(missing_ok=True)
-    safe, policy, profiles = prepare_inputs(
-        agent_environment(read_env_file(env_file())), yaml.safe_load(base_policy.read_text())
-    )
+    safe, profiles = prepare_inputs(agent_environment(read_env_file(env_file())))
     openshell("status")
-    openshell("settings", "set", "--global", "--key", "providers_v2_enabled", "--value", "true", "--yes")
-    existing = set(openshell("provider", "list", "--names", "--limit", "1000").splitlines())
+    # Profile IDs carry a digest of their content, so an imported ID is the same profile.
+    imported = listed(openshell("profile", "list", "--output", "json"), None, "id")
+    existing = listed(openshell("provider", "list", "--output", "json"), "providers", "name")
     names = []
     for profile, key, secret in profiles:
         path = output / f"{profile['id']}.yaml"
         private_json(path, profile)  # JSON is a strict YAML subset; no secret fields.
         name = profile["id"]
+        if name not in imported:
+            openshell("profile", "lint", "-f", str(path))
+            openshell("profile", "import", "-f", str(path))
         if name not in existing:
-            openshell("provider", "profile", "lint", "-f", str(path))
-            # Profile import is create-only. An interrupted earlier run must be
-            # reconciled explicitly rather than guessing whether an error is benign.
-            openshell("provider", "profile", "import", "-f", str(path))
             openshell(
                 "provider",
                 "create",
@@ -272,20 +279,18 @@ def prepare(output: Path, base_policy: Path) -> None:
             openshell("provider", "update", name, "--credential", key, credential=(key, secret))
         names.append(name)
     private_json(output / "env.json", safe)
-    private_json(output / "policy.yaml", policy)
     private_json(receipt, names)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=RUNTIME / "prepared")
-    parser.add_argument("--policy", type=Path, default=ROOT / "scripts/spark/openshell/policy.yaml")
+    parser.add_argument("--output", type=Path, default=PREPARED)
     args = parser.parse_args()
     try:
-        prepare(args.output, args.policy)
+        prepare(args.output)
     except PreparationError as error:
         raise SystemExit(str(error)) from None
-    except (KeyError, ValueError, OSError, yaml.YAMLError):
+    except (KeyError, TypeError, ValueError, OSError):
         raise SystemExit(
             "OpenShell configuration preparation failed; no credentials or command output were printed."
         ) from None

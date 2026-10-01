@@ -13,7 +13,6 @@ from uuid import UUID
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from mcp import Client
 
 from .agent import MarketAgent
 from .catalog import Coverage, EventCatalog
@@ -25,7 +24,6 @@ from .config import (
     MAX_TURNS,
     MODEL_URL,
     SPECULATOR_MODEL,
-    TOOLS_URL,
     Settings,
 )
 from .relay_tracing import RelayTracing
@@ -33,6 +31,7 @@ from .runner import Busy, Runner, fail_interrupted, new_investigation
 from .schemas import CreateInvestigation, FollowUp, Investigation
 from .scope import ScopeError, follow_up, resolve
 from .store import Store, load_key, open_checkpointer
+from .tools import tools_client
 
 log = logging.getLogger(__name__)
 REMOTE_REQUIRED = (
@@ -80,11 +79,14 @@ async def dependencies(request: Request) -> dict[str, bool]:
     if monotonic() - health["checked"] < 5:
         return health["value"]
     value = {"tools": False, "model": False, "events": request.app.state.events is not None}
+    try:
+        async with asyncio.timeout(5):
+            async with tools_client(3) as client:
+                await client.send_ping()
+        value["tools"] = True
+    except Exception:
+        log.debug("tools service ping failed", exc_info=True)
     async with httpx.AsyncClient(timeout=3) as client:
-        try:
-            value["tools"] = (await client.get(TOOLS_URL.removesuffix("/mcp") + "/health")).status_code == 200
-        except httpx.HTTPError:
-            pass
         try:
             models = (await client.get(MODEL_URL + "/models")).json().get("data", [])
             value["model"] = any(item.get("id") == LOCAL_MODEL for item in models)
@@ -161,7 +163,7 @@ async def dashboard(ticker: str, as_of: date, request: Request):
         raise HTTPException(422, f"Choose one of {', '.join(coverage.targets)}.")
     if not coverage.first_session <= as_of <= coverage.last_session:
         raise HTTPException(422, f"Choose a date from {coverage.first_session} to {coverage.last_session}.")
-    async with Client(TOOLS_URL, read_timeout_seconds=60) as client:
+    async with tools_client(60) as client:
         result = await client.read_resource(f"market://dashboard/{ticker}/{as_of.isoformat()}")
     contents = list(result.contents)
     text = getattr(contents[0], "text", None) if contents else None

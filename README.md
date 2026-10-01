@@ -32,7 +32,7 @@ a cited answer with a timeline of every model and tool call.
   fails.
 - **Traced and sandboxed.** NeMo Relay records one span per agent step and one
   per physical model call, with optional LangSmith export. The agent runs only
-  inside an NVIDIA OpenShell 0.0.116 sandbox.
+  inside an NVIDIA OpenShell 0.1.2 sandbox.
 
 **What is local and what is not.** Lightning, the embedding model, the tools,
 and all data run on the Spark, and startup never builds or downloads anything.
@@ -56,10 +56,10 @@ flowchart LR
 
 | Role | What it runs | Boundary |
 | --- | --- | --- |
-| `web:3000` | React UI, nginx proxy of `/api` to the agent | Only published port (`127.0.0.1:3000`) |
+| `web:3000` | React UI, nginx proxy of `/api` to the agent | Browser entry point (`127.0.0.1:3000`) |
 | `agent:2024` | FastAPI app, Deep Agent, Switchyard, Relay, encrypted state | OpenShell sandbox; no unsandboxed fallback |
-| `tools:8000` | MCP server with seven read-only tools | Private network; only the agent calls it |
-| `model:8001` | vLLM serving Lightning with a speculative draft model | Private network; only the agent calls it |
+| `tools:8000` | MCP server with seven read-only tools | Loopback only; the agent reaches it via `host.openshell.internal` |
+| `model:8001` | vLLM serving Lightning with a speculative draft model | Loopback only; the agent reaches it via `host.openshell.internal` |
 
 Compose runs `web`, `tools`, and `model`. OpenShell runs the agent. See
 [Architecture](docs/ARCHITECTURE.md) for the step-by-step request flow.
